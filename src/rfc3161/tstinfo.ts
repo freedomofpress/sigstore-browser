@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { ASN1Obj } from "../asn1";
-import { bufferEqual } from "../crypto";
-import { toArrayBuffer } from "../encoding";
-import { SHA2_HASH_ALGOS } from "../oid";
-import { RFC3161TimestampVerificationError } from "./error";
+import { ASN1Obj } from "../asn1/index.js";
+import { bufferEqual } from "../crypto.js";
+import { toArrayBuffer } from "../encoding.js";
+import { SHA2_HASH_ALGOS } from "../oid.js";
+import { RFC3161TimestampVerificationError } from "./error.js";
 
 export class TSTInfo {
   public root: ASN1Obj;

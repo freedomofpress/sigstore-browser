@@ -1,22 +1,26 @@
-import { SigstoreBundle } from "./bundle";
-import { canonicalize } from "./canonicalize";
-import { importKey, verifySignature } from "./crypto";
+import { SigstoreBundle } from "./bundle.js";
+import { canonicalize } from "./canonicalize.js";
+import { importKey, verifySignature } from "./crypto.js";
 import {
   base64ToUint8Array,
   stringToUint8Array,
   toArrayBuffer,
   Uint8ArrayToHex,
   Uint8ArrayToString,
-} from "./encoding";
+} from "./encoding.js";
 import {
   RawCAs,
   RawLogs,
   Sigstore,
   SigstoreRoots,
   TrustedRoot,
-} from "./interfaces";
-import { ByteStream } from "./stream";
-import { EXTENSION_OID_SCT, X509Certificate, X509SCTExtension } from "./x509";
+} from "./interfaces.js";
+import { ByteStream } from "./stream.js";
+import {
+  EXTENSION_OID_SCT,
+  X509Certificate,
+  X509SCTExtension,
+} from "./x509/index.js";
 
 export class SigstoreVerifier {
   private root: Sigstore | undefined;

@@ -14,8 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import { ByteStream } from "../stream";
-import { ASN1ParseError } from "./error";
+import { ByteStream } from "../stream.js";
+import { ASN1ParseError } from "./error.js";
 
 // Decodes the length of a DER-encoded ANS.1 element from the supplied stream.
 // https://learn.microsoft.com/en-us/windows/win32/seccertenroll/about-encoded-length-and-value-bytes

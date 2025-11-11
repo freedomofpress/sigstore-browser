@@ -1,4 +1,4 @@
-import { X509Certificate } from "./x509";
+import { X509Certificate } from "./x509/index.js";
 
 export enum SigstoreRoots {
   certificateAuthorities = "certificateAuthorities",

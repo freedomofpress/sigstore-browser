@@ -13,10 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { ASN1Obj } from "../asn1";
-import { toArrayBuffer, Uint8ArrayToString } from "../encoding";
-import { ByteStream } from "../stream";
-import { SignedCertificateTimestamp } from "./sct";
+import { ASN1Obj } from "../asn1/index.js";
+import { toArrayBuffer, Uint8ArrayToString } from "../encoding.js";
+import { ByteStream } from "../stream.js";
+import { SignedCertificateTimestamp } from "./sct.js";
 
 // https://www.rfc-editor.org/rfc/rfc5280#section-4.1
 export class X509Extension {

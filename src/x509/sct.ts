@@ -13,9 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { verifySignature } from "../crypto";
-import { readBigInt64BE, toArrayBuffer } from "../encoding";
-import { ByteStream } from "../stream";
+import { verifySignature } from "../crypto.js";
+import { readBigInt64BE, toArrayBuffer } from "../encoding.js";
+import { ByteStream } from "../stream.js";
 
 interface SCTOptions {
   version: number;

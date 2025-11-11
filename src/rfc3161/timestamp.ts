@@ -13,12 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { ASN1Obj } from "../asn1";
-import { bufferEqual, verifySignature } from "../crypto";
-import { toArrayBuffer } from "../encoding";
-import { ECDSA_SIGNATURE_ALGOS, SHA2_HASH_ALGOS } from "../oid";
-import { RFC3161TimestampVerificationError } from "./error";
-import { TSTInfo } from "./tstinfo";
+import { ASN1Obj } from "../asn1/index.js";
+import { bufferEqual, verifySignature } from "../crypto.js";
+import { toArrayBuffer } from "../encoding.js";
+import { ECDSA_SIGNATURE_ALGOS, SHA2_HASH_ALGOS } from "../oid.js";
+import { RFC3161TimestampVerificationError } from "./error.js";
+import { TSTInfo } from "./tstinfo.js";
 
 const OID_PKCS9_CONTENT_TYPE_SIGNED_DATA = "1.2.840.113549.1.7.2";
 const OID_PKCS9_CONTENT_TYPE_TSTINFO = "1.2.840.113549.1.9.16.1.4";

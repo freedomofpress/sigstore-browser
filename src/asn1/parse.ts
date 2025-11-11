@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import { Uint8ArrayToString } from "../encoding";
+import { Uint8ArrayToString } from "../encoding.js";
 
 const RE_TIME_SHORT_YEAR =
   /^(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\.\d{3})?Z$/;

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import { base64ToUint8Array, Uint8ArrayToBase64 } from "./encoding";
+import { base64ToUint8Array, Uint8ArrayToBase64 } from "./encoding.js";
 
 const PEM_HEADER = /-----BEGIN (.*)-----/;
 const PEM_FOOTER = /-----END (.*)-----/;

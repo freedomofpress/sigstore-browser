@@ -1,7 +1,11 @@
-import { ASN1Obj } from "./asn1";
-import { base64ToUint8Array, hexToUint8Array, toArrayBuffer } from "./encoding";
-import { EcdsaTypes, HashAlgorithms, KeyTypes } from "./interfaces";
-import { toDER } from "./pem";
+import { ASN1Obj } from "./asn1/index.js";
+import {
+  base64ToUint8Array,
+  hexToUint8Array,
+  toArrayBuffer,
+} from "./encoding.js";
+import { EcdsaTypes, HashAlgorithms, KeyTypes } from "./interfaces.js";
+import { toDER } from "./pem.js";
 
 export async function importKey(
   keytype: string,
