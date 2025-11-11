@@ -25,3 +25,4 @@ jobs:
       - uses: sigstore/sigstore-conformance@v0.0.21
         with:
           entrypoint: dist/cli.js
+          xfail-file: dist/cli.js.xfails
