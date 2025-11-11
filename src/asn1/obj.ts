@@ -23,8 +23,8 @@ import {
   parseInteger,
   parseOID,
   parseTime,
-} from "./parse";
-import { ASN1Tag } from "./tag";
+} from "./parse.js";
+import { ASN1Tag } from "./tag.js";
 
 export class ASN1Obj {
   readonly tag: ASN1Tag;

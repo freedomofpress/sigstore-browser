@@ -28,7 +28,7 @@ import {
   X509SCTExtension,
   X509SubjectAlternativeNameExtension,
   X509SubjectKeyIDExtension,
-} from "./ext";
+} from "./ext.js";
 
 // https://github.com/sigstore/fulcio/blob/main/docs/oid-info.md
 const EXTENSION_OID_SUBJECT_KEY_ID = "2.5.29.14";
