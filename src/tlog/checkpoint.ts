@@ -1,4 +1,7 @@
 import { base64ToUint8Array, stringToUint8Array } from "../encoding.js";
+import { verifySignature } from "../crypto.js";
+import type { TLogEntry } from "../bundle.js";
+import type { RawLogs } from "../interfaces.js";
 
 const CHECKPOINT_SEPARATOR = "\n\n";
 const SIGNATURE_REGEX = /\u2014 (\S+) (\S+)\n/g;
@@ -85,4 +88,123 @@ export class LogCheckpoint {
 
     return new LogCheckpoint(origin, logSize, rootHash, rest);
   }
+}
+
+export async function verifyCheckpoint(
+  entry: TLogEntry,
+  tlogs: RawLogs
+): Promise<void> {
+  if (!entry.inclusionProof?.checkpoint) {
+    throw new Error("Missing checkpoint in inclusion proof");
+  }
+
+  const integratedTime = new Date(Number(entry.integratedTime) * 1000);
+  const validTLogs = filterTLogsByDate(tlogs, integratedTime);
+
+  const inclusionProof = entry.inclusionProof;
+  const signedNote = SignedNote.fromString(inclusionProof.checkpoint.envelope);
+  const checkpoint = LogCheckpoint.fromString(signedNote.note);
+
+  if (!(await verifySignedNote(signedNote, validTLogs))) {
+    throw new Error("Invalid checkpoint signature");
+  }
+
+  const rootHash = base64ToUint8Array(inclusionProof.rootHash);
+  if (!uint8ArrayEqual(checkpoint.logHash, rootHash)) {
+    throw new Error("Root hash mismatch between checkpoint and inclusion proof");
+  }
+}
+
+async function verifySignedNote(
+  signedNote: SignedNote,
+  tlogs: RawLogs
+): Promise<boolean> {
+  const data = stringToUint8Array(signedNote.note);
+
+  for (const signature of signedNote.signatures) {
+    const tlog = tlogs.find((tlog) => {
+      const logId = base64ToUint8Array(tlog.logId.keyId);
+      return uint8ArrayEqual(logId.subarray(0, 4), signature.keyHint);
+    });
+
+    if (!tlog) {
+      return false;
+    }
+
+    const publicKey = await importTLogKey(tlog);
+    const verified = await verifySignature(
+      publicKey,
+      data,
+      signature.signature,
+      tlog.hashAlgorithm
+    );
+
+    if (!verified) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function filterTLogsByDate(tlogs: RawLogs, targetDate: Date): RawLogs {
+  return tlogs.filter((tlog) => {
+    const start = new Date(tlog.publicKey.validFor.start);
+    const end = tlog.publicKey.validFor.end
+      ? new Date(tlog.publicKey.validFor.end)
+      : null;
+
+    return targetDate >= start && (!end || targetDate <= end);
+  });
+}
+
+async function importTLogKey(tlog: RawLogs[0]): Promise<CryptoKey> {
+  const { importKey } = await import("../crypto.js");
+
+  // Parse keyDetails to extract key type and scheme
+  // Formats can be:
+  // - "PKIX_ECDSA_P256_SHA_256" (production format)
+  // - "PKIX_ED25519"
+  // - "ecdsa-sha2-nistp256" (SSH/test format)
+  const keyDetails = tlog.publicKey.keyDetails;
+  let keyType: string;
+  let scheme: string;
+
+  if (keyDetails === "ecdsa-sha2-nistp256") {
+    // SSH-style ECDSA P-256 format used in tests
+    keyType = "ecdsa";
+    scheme = "P256-SHA256";
+  } else if (keyDetails.includes("ECDSA")) {
+    keyType = "ecdsa";
+    // Extract the curve and hash, e.g., "P256_SHA_256" from "PKIX_ECDSA_P256_SHA_256"
+    scheme = keyDetails.replace("PKIX_ECDSA_", "").replaceAll("_", "-");
+  } else if (keyDetails.includes("ED25519")) {
+    keyType = "ed25519";
+    scheme = "ed25519";
+  } else if (keyDetails.includes("RSA")) {
+    keyType = "rsa";
+    // Extract RSA details, e.g., "PSS_SHA_256" from "PKIX_RSA_PSS_SHA_256"
+    scheme = keyDetails.replace("PKIX_RSA_", "").replaceAll("_", "-");
+  } else {
+    throw new Error(`Unsupported key type in keyDetails: ${keyDetails}`);
+  }
+
+  return importKey(
+    keyType,
+    scheme,
+    tlog.publicKey.rawBytes
+  );
+}
+
+function uint8ArrayEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.byteLength !== b.byteLength) {
+    return false;
+  }
+
+  for (let i = 0; i < a.byteLength; i++) {
+    if (a[i] !== b[i]) {
+      return false;
+    }
+  }
+  return true;
 }
