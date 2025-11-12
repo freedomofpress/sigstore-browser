@@ -21,14 +21,16 @@ import {
   X509Certificate,
   X509SCTExtension,
 } from "./x509/index.js";
+import { verifyMerkleInclusion } from "./tlog/merkle.js";
+import { verifyCheckpoint } from "./tlog/checkpoint.js";
 
 export class SigstoreVerifier {
   private root: Sigstore | undefined;
+  private rawRoot: TrustedRoot | undefined;
 
   constructor() {
-    // Previously we had the call to loadSigstoreRoot()
-    // But we cannot have async constructors, and that causes nasty race conditions
     this.root = undefined;
+    this.rawRoot = undefined;
   }
 
   async loadLog(frozenTimestamp: Date, logs: RawLogs): Promise<CryptoKey> {
@@ -94,9 +96,9 @@ export class SigstoreVerifier {
   }
 
   async loadSigstoreRoot(rawRoot: TrustedRoot) {
-    // Let's learn from TUF and load all pieces relative from a single point in time
     const frozenTimestamp = new Date();
 
+    this.rawRoot = rawRoot;
     this.root = {
       rekor: await this.loadLog(frozenTimestamp, rawRoot[SigstoreRoots.tlogs]),
       ctfe: await this.loadLog(frozenTimestamp, rawRoot[SigstoreRoots.ctlogs]),
@@ -104,7 +106,6 @@ export class SigstoreVerifier {
         frozenTimestamp,
         rawRoot[SigstoreRoots.certificateAuthorities],
       ),
-      // Sigstore community is not using timestampAuthorities for now
     };
   }
 
@@ -260,6 +261,26 @@ export class SigstoreVerifier {
     return true;
   }
 
+  async verifyInclusionProof(bundle: SigstoreBundle): Promise<void> {
+    if (!this.rawRoot) {
+      throw new Error("Sigstore root is undefined");
+    }
+
+    if (bundle.verificationMaterial.tlogEntries.length < 1) {
+      throw new Error("No transparency log entries found in bundle");
+    }
+
+    const entry = bundle.verificationMaterial.tlogEntries[0];
+
+    if (entry.inclusionProof) {
+      await verifyMerkleInclusion(entry);
+
+      if (entry.inclusionProof.checkpoint) {
+        await verifyCheckpoint(entry, this.rawRoot.tlogs);
+      }
+    }
+  }
+
   public async verifyArtifact(
     identity: string,
     issuer: string,
@@ -330,7 +351,8 @@ export class SigstoreVerifier {
       throw new Error("Inclusion promise validation failed.");
     }
 
-    // # 5 Rekor treehashes
+    // # 5 Rekor inclusion proof (Merkle tree verification)
+    await this.verifyInclusionProof(bundle);
 
     // # 6 TSA *skipping*, not supported by sigstore community
 
