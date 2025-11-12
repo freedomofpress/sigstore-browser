@@ -1,16 +1,25 @@
-export interface SigstoreBundle {
+type SigstoreBundleBase = {
   mediaType: string;
   verificationMaterial: VerificationMaterial;
-  messageSignature: MessageSignature;
-}
+};
+
+export type SigstoreBundle =
+  | (SigstoreBundleBase & { messageSignature: MessageSignature; dsseEnvelope?: never })
+  | (SigstoreBundleBase & { messageSignature?: never; dsseEnvelope: DSSEEnvelope });
 
 export interface VerificationMaterial {
-  certificate: Certificate;
+  certificate?: Certificate;
+  x509CertificateChain?: X509CertificateChain;
   tlogEntries: TLogEntry[];
+  timestampVerificationData?: TimestampVerificationData;
 }
 
 export interface Certificate {
   rawBytes: string; // Base64-encoded certificate bytes
+}
+
+export interface X509CertificateChain {
+  certificates: Certificate[];
 }
 
 export interface TLogEntry {
@@ -56,4 +65,35 @@ export interface MessageSignature {
 export interface MessageDigest {
   algorithm: string; // Hashing algorithm, e.g., "SHA2_256"
   digest: string; // Base64-encoded message digest
+}
+
+export interface DSSEEnvelope {
+  payload: string;
+  payloadType: string;
+  signatures: DSSESignature[];
+}
+
+export interface DSSESignature {
+  sig: string;
+  keyid?: string;
+}
+
+export interface TimestampVerificationData {
+  rfc3161Timestamps: RFC3161Timestamp[];
+}
+
+export interface RFC3161Timestamp {
+  signedTimestamp: string; // Base64-encoded RFC3161 SignedData
+}
+
+export interface InTotoStatement {
+  _type: string;
+  subject: InTotoSubject[];
+  predicateType: string;
+  predicate: Record<string, unknown>;
+}
+
+export interface InTotoSubject {
+  name: string;
+  digest: Record<string, string>;
 }

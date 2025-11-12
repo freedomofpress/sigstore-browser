@@ -272,9 +272,19 @@ export class SigstoreVerifier {
       throw new Error("Sigstore root is undefined");
     }
 
-    const signingCert = X509Certificate.parse(
-      bundle.verificationMaterial.certificate.rawBytes,
-    );
+    const cert = bundle.verificationMaterial.certificate ||
+      bundle.verificationMaterial.x509CertificateChain?.certificates[0];
+
+    if (!cert) {
+      throw new Error("No certificate found in bundle");
+    }
+
+    const signingCert = X509Certificate.parse(cert.rawBytes);
+
+    if (!bundle.messageSignature) {
+      throw new Error("No message signature found in bundle");
+    }
+
     const signature = base64ToUint8Array(bundle.messageSignature.signature);
 
     // # 1 Basic stuff

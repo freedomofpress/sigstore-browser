@@ -192,6 +192,10 @@ async function verifyBundle(options: CLIOptions): Promise<void> {
   const verifier = new SigstoreVerifier();
   await verifier.loadSigstoreRoot(trustedRoot);
 
+  if (!bundle.messageSignature) {
+    throw new Error("Bundle does not contain a message signature");
+  }
+
   if (bundle.messageSignature.messageDigest.algorithm !== "SHA2_256") {
     throw new Error(
       `Unsupported message digest algorithm: ${bundle.messageSignature.messageDigest.algorithm}`,
