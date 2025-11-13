@@ -23,6 +23,7 @@ import {
 } from "./x509/index.js";
 import { verifyMerkleInclusion } from "./tlog/merkle.js";
 import { verifyCheckpoint } from "./tlog/checkpoint.js";
+import { verifyTLogBody } from "./tlog/body.js";
 
 export class SigstoreVerifier {
   private root: Sigstore | undefined;
@@ -351,6 +352,14 @@ export class SigstoreVerifier {
 
     // # 5 Rekor inclusion proof (Merkle tree verification)
     await this.verifyInclusionProof(bundle);
+
+    // # 5.1 Rekor body verification
+    if (bundle.verificationMaterial.tlogEntries.length > 0) {
+      await verifyTLogBody(
+        bundle.verificationMaterial.tlogEntries[0],
+        bundle
+      );
+    }
 
     // # 6 TSA *skipping*, not supported by sigstore community
 
