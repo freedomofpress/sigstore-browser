@@ -194,42 +194,43 @@ export class SigstoreVerifier {
       );
     }
 
-    if (
-      bundle.verificationMaterial.tlogEntries[0].inclusionPromise
-        ?.signedEntryTimestamp === undefined
-    ) {
-      throw new Error("Failed to find an inclusion promise.");
-    }
+    const entry = bundle.verificationMaterial.tlogEntries[0];
 
-    const signature = base64ToUint8Array(
-      bundle.verificationMaterial.tlogEntries[0].inclusionPromise
-        ?.signedEntryTimestamp,
-    );
-
-    const keyId = Uint8ArrayToHex(
-      base64ToUint8Array(
-        bundle.verificationMaterial.tlogEntries[0].logId.keyId,
-      ),
-    );
-    const integratedTime = Number(
-      bundle.verificationMaterial.tlogEntries[0].integratedTime,
-    );
-
-    const signed = stringToUint8Array(
-      canonicalize({
-        body: bundle.verificationMaterial.tlogEntries[0].canonicalizedBody,
-        integratedTime: integratedTime,
-        logIndex: Number(bundle.verificationMaterial.tlogEntries[0].logIndex),
-        logID: keyId,
-      }),
-    );
-
-    if (!(await verifySignature(rekor, signed, signature))) {
-      throw new Error(
-        "Failed to verify the inclusion promise in the provided bundle.",
+    // For rekor2/v0.3 bundles with inclusion proofs, the inclusion promise is optional
+    if (!entry.inclusionPromise?.signedEntryTimestamp) {
+      // If there's no inclusion promise, there must be an inclusion proof
+      if (!entry.inclusionProof) {
+        throw new Error(
+          "Bundle must have either an inclusion promise or an inclusion proof.",
+        );
+      }
+    } else {
+      // Verify the inclusion promise signature if present
+      const signature = base64ToUint8Array(
+        entry.inclusionPromise.signedEntryTimestamp,
       );
+
+      const keyId = Uint8ArrayToHex(base64ToUint8Array(entry.logId.keyId));
+      const integratedTime = Number(entry.integratedTime);
+
+      const signed = stringToUint8Array(
+        canonicalize({
+          body: entry.canonicalizedBody,
+          integratedTime: integratedTime,
+          logIndex: Number(entry.logIndex),
+          logID: keyId,
+        }),
+      );
+
+      if (!(await verifySignature(rekor, signed, signature))) {
+        throw new Error(
+          "Failed to verify the inclusion promise in the provided bundle.",
+        );
+      }
     }
 
+    // Always validate integrated time and logged certificate
+    const integratedTime = Number(entry.integratedTime);
     const integratedDate = new Date(integratedTime * 1000);
 
     if (!cert.validForDate(integratedDate)) {
@@ -242,13 +243,8 @@ export class SigstoreVerifier {
     const loggedCert = X509Certificate.parse(
       Uint8ArrayToString(
         base64ToUint8Array(
-          JSON.parse(
-            Uint8ArrayToString(
-              base64ToUint8Array(
-                bundle.verificationMaterial.tlogEntries[0].canonicalizedBody,
-              ),
-            ),
-          ).spec.signature.publicKey.content,
+          JSON.parse(Uint8ArrayToString(base64ToUint8Array(entry.canonicalizedBody)))
+            .spec.signature.publicKey.content,
         ),
       ),
     );
@@ -272,6 +268,8 @@ export class SigstoreVerifier {
 
     const entry = bundle.verificationMaterial.tlogEntries[0];
 
+    // Only verify if there's an inclusion proof (v0.3/rekor2 bundles)
+    // v0.1 bundles use inclusion promises instead, verified in verifyInclusionPromise
     if (entry.inclusionProof) {
       await verifyMerkleInclusion(entry);
 
