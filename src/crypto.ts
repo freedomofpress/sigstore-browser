@@ -140,9 +140,11 @@ export async function verifySignature(
       toArrayBuffer(signed),
     );
   } else if (key.algorithm.name === KeyTypes.Ed25519) {
-    // No need to specify hash in this case, the crypto API does not take it as input for this key type
-    throw new Error(
-      "This is untested but could likely work, but not for prod usage :)",
+    return await crypto.subtle.verify(
+      key.algorithm.name,
+      key,
+      toArrayBuffer(sig),
+      toArrayBuffer(signed),
     );
   } else if (key.algorithm.name === KeyTypes.RSA) {
     throw new Error("RSA could work, if only someone coded the support :)");

@@ -132,12 +132,23 @@ async function verifySignedNote(
     }
 
     const publicKey = await importTLogKey(tlog);
-    const verified = await verifySignature(
-      publicKey,
-      data,
-      signature.signature,
-      tlog.hashAlgorithm
-    );
+
+    // ED25519 signatures are raw (64 bytes), ECDSA signatures are DER-encoded
+    const isEd25519 = tlog.publicKey.keyDetails.includes("ED25519");
+    let verified: boolean;
+
+    if (isEd25519) {
+      // ED25519 uses raw signatures
+      verified = await verifyRawSignature(publicKey, data, signature.signature);
+    } else {
+      // ECDSA uses DER-encoded signatures
+      verified = await verifySignature(
+        publicKey,
+        data,
+        signature.signature,
+        tlog.hashAlgorithm
+      );
+    }
 
     if (!verified) {
       return false;
@@ -145,6 +156,21 @@ async function verifySignedNote(
   }
 
   return true;
+}
+
+async function verifyRawSignature(
+  key: CryptoKey,
+  signed: Uint8Array,
+  rawSig: Uint8Array,
+): Promise<boolean> {
+  const { toArrayBuffer } = await import("../encoding.js");
+
+  return await crypto.subtle.verify(
+    key.algorithm.name,
+    key,
+    toArrayBuffer(rawSig),
+    toArrayBuffer(signed),
+  );
 }
 
 function filterTLogsByDate(tlogs: RawLogs, targetDate: Date): RawLogs {

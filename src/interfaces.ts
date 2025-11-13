@@ -74,7 +74,7 @@ export interface RawCA {
   };
   validFor: {
     start: string;
-    end: string;
+    end?: string;
   };
 }
 
