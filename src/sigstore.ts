@@ -29,13 +29,25 @@ import { verifyTLogBody } from "./tlog/body.js";
 import { verifyBundleTimestamp } from "./timestamp/tsa.js";
 import { TrustedRootProvider } from "./trust/tuf.js";
 
+export interface SigstoreVerifierOptions {
+  tlogThreshold?: number;
+  ctlogThreshold?: number;
+  tsaThreshold?: number;
+}
+
 export class SigstoreVerifier {
   private root: Sigstore | undefined;
   private rawRoot: TrustedRoot | undefined;
+  private options: Required<SigstoreVerifierOptions>;
 
-  constructor() {
+  constructor(options: SigstoreVerifierOptions = {}) {
     this.root = undefined;
     this.rawRoot = undefined;
+    this.options = {
+      tlogThreshold: options.tlogThreshold ?? 1,
+      ctlogThreshold: options.ctlogThreshold ?? 1,
+      tsaThreshold: options.tsaThreshold ?? 0,
+    };
   }
 
   async loadLog(frozenTimestamp: Date, logs: RawLogs): Promise<CryptoKey | undefined> {

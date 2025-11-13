@@ -5,6 +5,7 @@
     "module": "ESNext",
     "sourceMap": true,
     "moduleResolution": "node",
+    "resolveJsonModule": true,
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,

@@ -18,7 +18,7 @@ interface CLIOptions {
   bundlePath: string;
   certificateIdentity: string;
   certificateOidcIssuer: string;
-  trustedRootPath: string;
+  trustedRootPath: string | undefined;
   artifactInput: string;
 }
 
@@ -121,10 +121,6 @@ function parseArgs(argv: string[]): CLIOptions {
     throw new Error("Missing required option --certificate-oidc-issuer");
   }
 
-  if (!options.trustedRootPath) {
-    throw new Error("Missing required option --trusted-root");
-  }
-
   return {
     bundlePath: options.bundlePath,
     certificateIdentity: options.certificateIdentity,
@@ -170,7 +166,12 @@ async function resolveArtifact(input: string): Promise<ArtifactInput> {
   };
 }
 
-async function loadTrustedRoot(pathInput: string): Promise<TrustedRoot> {
+async function loadTrustedRoot(
+  pathInput: string | undefined,
+): Promise<TrustedRoot> {
+  if (!pathInput) {
+    return defaultTrustedRoot as TrustedRoot;
+  }
   const resolvedPath = path.resolve(pathInput);
   const raw = await readFile(resolvedPath, "utf8");
   return JSON.parse(raw) as TrustedRoot;
