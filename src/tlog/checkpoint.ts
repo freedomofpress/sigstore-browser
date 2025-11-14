@@ -3,7 +3,11 @@ import { verifySignature } from "../crypto.js";
 import type { TLogEntry } from "../bundle.js";
 import type { RawLogs } from "../interfaces.js";
 
+// Signed note format per https://github.com/transparency-dev/formats
+// Body is separated from signatures by a blank line
 const CHECKPOINT_SEPARATOR = "\n\n";
+// Signature lines format: "— <identity> <base64(key_hint+signature)>\n"
+// \u2014 is the em-dash character (—)
 const SIGNATURE_REGEX = /\u2014 (\S+) (\S+)\n/g;
 
 export interface TLogSignature {
@@ -26,10 +30,12 @@ export class SignedNote {
       throw new Error("Missing checkpoint separator");
     }
 
+    // Split body from signature lines at blank line
     const split = envelope.indexOf(CHECKPOINT_SEPARATOR);
     const header = envelope.slice(0, split + 1);
     const data = envelope.slice(split + CHECKPOINT_SEPARATOR.length);
 
+    // Parse signature lines: "— <identity> <base64(key_hint+signature)>\n"
     const matches = data.matchAll(SIGNATURE_REGEX);
 
     const signatures: TLogSignature[] = [];
@@ -37,6 +43,7 @@ export class SignedNote {
       const [, name, signature] = match;
       const sigBytes = base64ToUint8Array(signature);
 
+      // First 4 bytes are key hint (SHA256 hash prefix), rest is signature
       if (sigBytes.length < 5) {
         throw new Error("Malformed checkpoint signature");
       }
