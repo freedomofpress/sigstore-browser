@@ -1,3 +1,19 @@
+/*
+Checkpoint verification for transparency log entries.
+
+Adapted from sigstore-js for browser compatibility:
+https://github.com/sigstore/sigstore-js/blob/main/packages/verify/src/timestamp/checkpoint.ts
+
+Key differences:
+- Uses Uint8Array instead of Buffer
+- Uses Web Crypto API instead of Node.js crypto module
+- Manual handling of ED25519 (raw) vs ECDSA (DER) signature formats
+- Inline key import from raw bytes
+
+Follows the signed note format specification:
+https://github.com/transparency-dev/formats/blob/main/log/README.md
+*/
+
 import { base64ToUint8Array, stringToUint8Array, uint8ArrayEqual } from "../encoding.js";
 import { verifySignature } from "../crypto.js";
 import type { TLogEntry } from "../bundle.js";
@@ -16,6 +32,7 @@ export interface TLogSignature {
   signature: Uint8Array;
 }
 
+// Signed checkpoint note with cryptographic signatures
 export class SignedNote {
   readonly note: string;
   readonly signatures: TLogSignature[];
@@ -63,6 +80,7 @@ export class SignedNote {
   }
 }
 
+// Parsed checkpoint containing tree state (origin, size, root hash)
 export class LogCheckpoint {
   readonly origin: string;
   readonly logSize: bigint;
@@ -97,6 +115,7 @@ export class LogCheckpoint {
   }
 }
 
+// Verifies checkpoint signature and ensures root hash matches inclusion proof
 export async function verifyCheckpoint(
   entry: TLogEntry,
   tlogs: RawLogs
@@ -122,6 +141,7 @@ export async function verifyCheckpoint(
   }
 }
 
+// Verifies checkpoint signatures using trusted TLog keys
 async function verifySignedNote(
   signedNote: SignedNote,
   tlogs: RawLogs
@@ -129,6 +149,7 @@ async function verifySignedNote(
   const data = stringToUint8Array(signedNote.note);
 
   for (const signature of signedNote.signatures) {
+    // Match signature to TLog using key hint (first 4 bytes of key ID)
     const tlog = tlogs.find((tlog) => {
       const logId = base64ToUint8Array(tlog.logId.keyId);
       return uint8ArrayEqual(logId.subarray(0, 4), signature.keyHint);
