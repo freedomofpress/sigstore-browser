@@ -11,3 +11,4 @@ export {
   PolicyError,
 } from "./errors.js";
 export { verifyRFC3161Timestamp, verifyBundleTimestamp } from "./timestamp/tsa.js";
+export { TrustedRootProvider, type TrustedRootProviderOptions } from "./trust/tuf.js";
