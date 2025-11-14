@@ -1,4 +1,4 @@
-import { base64ToUint8Array, stringToUint8Array } from "../encoding.js";
+import { base64ToUint8Array, stringToUint8Array, uint8ArrayEqual } from "../encoding.js";
 import { verifySignature } from "../crypto.js";
 import type { TLogEntry } from "../bundle.js";
 import type { RawLogs } from "../interfaces.js";
@@ -227,17 +227,4 @@ async function importTLogKey(tlog: RawLogs[0]): Promise<CryptoKey> {
     scheme,
     tlog.publicKey.rawBytes
   );
-}
-
-function uint8ArrayEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.byteLength !== b.byteLength) {
-    return false;
-  }
-
-  for (let i = 0; i < a.byteLength; i++) {
-    if (a[i] !== b[i]) {
-      return false;
-    }
-  }
-  return true;
 }
