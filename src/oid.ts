@@ -7,6 +7,14 @@ export const ECDSA_SIGNATURE_ALGOS: Record<string, string> = {
   "1.2.840.10045.4.3.4": "sha512",
 };
 
+// RSA signature algorithms
+export const RSA_SIGNATURE_ALGOS: Record<string, string> = {
+  "1.2.840.113549.1.1.11": "sha256", // sha256WithRSAEncryption
+  "1.2.840.113549.1.1.12": "sha384", // sha384WithRSAEncryption
+  "1.2.840.113549.1.1.13": "sha512", // sha512WithRSAEncryption
+  "1.2.840.113549.1.1.5": "sha1",    // sha1WithRSAEncryption
+};
+
 export const SHA2_HASH_ALGOS: Record<string, string> = {
   "2.16.840.1.101.3.4.2.1": "sha256",
   "2.16.840.1.101.3.4.2.2": "sha384",

@@ -28,7 +28,6 @@ import { verifyMerkleInclusion } from "./tlog/merkle.js";
 import { verifyCheckpoint } from "./tlog/checkpoint.js";
 import { verifyTLogBody } from "./tlog/body.js";
 import { verifyBundleTimestamp } from "./timestamp/tsa.js";
-import { TrustedRootProvider } from "./trust/tuf.js";
 
 export interface SigstoreVerifierOptions {
   tlogThreshold?: number;

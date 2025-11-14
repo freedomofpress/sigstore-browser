@@ -16,7 +16,7 @@ limitations under the License.
 import { ASN1Obj } from "../asn1/index.js";
 import { bufferEqual, verifySignature } from "../crypto.js";
 import { toArrayBuffer } from "../encoding.js";
-import { ECDSA_SIGNATURE_ALGOS, SHA2_HASH_ALGOS } from "../oid.js";
+import { ECDSA_SIGNATURE_ALGOS, RSA_SIGNATURE_ALGOS, SHA2_HASH_ALGOS } from "../oid.js";
 import { RFC3161TimestampVerificationError } from "./error.js";
 import { TSTInfo } from "./tstinfo.js";
 
@@ -62,12 +62,26 @@ export class RFC3161Timestamp {
 
   get signerDigestAlgorithm(): string {
     const oid = this.signerDigestAlgorithmObj.subs[0].toOID();
-    return SHA2_HASH_ALGOS[oid];
+    const algo = SHA2_HASH_ALGOS[oid];
+    if (process.env.DEBUG_SIGSTORE) {
+      console.error(`RFC3161 signerDigestAlgorithm - OID: ${oid}, algo: ${algo}`);
+    }
+    if (!algo) {
+      throw new Error(`Unknown digest algorithm OID: ${oid}`);
+    }
+    return algo;
   }
 
   get signatureAlgorithm(): string {
     const oid = this.signatureAlgorithmObj.subs[0].toOID();
-    return ECDSA_SIGNATURE_ALGOS[oid];
+    if (process.env.DEBUG_SIGSTORE) {
+      console.error(`RFC3161 signature algorithm OID: ${oid}`);
+    }
+    const algo = ECDSA_SIGNATURE_ALGOS[oid] || RSA_SIGNATURE_ALGOS[oid];
+    if (!algo && process.env.DEBUG_SIGSTORE) {
+      console.error(`Unknown signature algorithm OID: ${oid}`);
+    }
+    return algo;
   }
 
   get signatureValue(): Uint8Array {
@@ -108,8 +122,18 @@ export class RFC3161Timestamp {
 
   private async verifyMessageDigest(): Promise<void> {
     // Check that the tstInfo matches the signed data
+    const hashAlg = this.signerDigestAlgorithm;
+    if (process.env.DEBUG_SIGSTORE) {
+      console.error(`RFC3161 verifyMessageDigest - algorithm: ${hashAlg}`);
+    }
+
+    // Convert hash algorithm name to the format expected by WebCrypto
+    const hashAlgName = hashAlg === "sha256" ? "SHA-256" :
+                       hashAlg === "sha384" ? "SHA-384" :
+                       hashAlg === "sha512" ? "SHA-512" : hashAlg;
+
     const tstInfoDigest = await crypto.subtle.digest(
-      this.signerDigestAlgorithm,
+      hashAlgName,
       toArrayBuffer(this.tstInfo.raw),
     );
     const expectedDigest = this.messageDigestAttributeObj.subs[1].subs[0].value;
@@ -126,12 +150,27 @@ export class RFC3161Timestamp {
     const signedAttrs = this.signedAttrsObj.toDER();
     signedAttrs[0] = 0x31; // Change context-specific tag to SET
 
+    const oid = this.signatureAlgorithmObj.subs[0].toOID();
+    // Try both ECDSA and RSA signature algorithms
+    const algo = ECDSA_SIGNATURE_ALGOS[oid] || RSA_SIGNATURE_ALGOS[oid];
+
+    if (process.env.DEBUG_SIGSTORE) {
+      console.error(`RFC3161 verifySignature - OID: ${oid}, algo: ${algo}`);
+      console.error(`Key algorithm: ${key.algorithm.name}`);
+    }
+
+    if (!algo) {
+      throw new RFC3161TimestampVerificationError(
+        `Unsupported signature algorithm OID: ${oid}`,
+      );
+    }
+
     // Check that the signature is valid for the signed attributes
     const verified = await verifySignature(
       key,
       signedAttrs,
       this.signatureValue,
-      this.signatureAlgorithm,
+      algo,
     );
 
     if (!verified) {
