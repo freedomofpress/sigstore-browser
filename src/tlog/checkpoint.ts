@@ -160,10 +160,6 @@ async function verifySignedNote(
   // We need at least one valid signature from a known TLog
   let hasValidSignature = false;
 
-  if (process.env.DEBUG_SIGSTORE) {
-    console.error(`Verifying ${signedNote.signatures.length} checkpoint signatures`);
-  }
-
   for (const signature of signedNote.signatures) {
     // Match signature to TLog using key hint (first 4 bytes of key ID)
     const tlog = tlogs.find((tlog) => {
@@ -173,14 +169,7 @@ async function verifySignedNote(
 
     if (!tlog) {
       // Skip unknown signatures (e.g., from witnesses we don't know about)
-      if (process.env.DEBUG_SIGSTORE) {
-        console.error(`No TLog found for key hint ${Uint8ArrayToHex(signature.keyHint)}`);
-      }
       continue;
-    }
-
-    if (process.env.DEBUG_SIGSTORE) {
-      console.error(`Found TLog: ${tlog.baseUrl}`);
     }
 
     const publicKey = await importTLogKey(tlog);
@@ -204,13 +193,6 @@ async function verifySignedNote(
 
     if (verified) {
       hasValidSignature = true;
-      if (process.env.DEBUG_SIGSTORE) {
-        console.error(`Checkpoint signature verified with ${tlog.baseUrl}`);
-      }
-    } else {
-      if (process.env.DEBUG_SIGSTORE) {
-        console.error(`Checkpoint signature verification failed with ${tlog.baseUrl}`);
-      }
     }
   }
 

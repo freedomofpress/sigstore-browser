@@ -37,9 +37,6 @@ export class TSTInfo {
   get messageImprintHashAlgorithm(): string {
     const oid = this.messageImprintObj.subs[0].subs[0].toOID();
     const algo = SHA2_HASH_ALGOS[oid];
-    if (process.env.DEBUG_SIGSTORE) {
-      console.error(`TSTInfo messageImprintHashAlgorithm - OID: ${oid}, algo: ${algo}`);
-    }
     if (!algo) {
       throw new Error(`Unknown message imprint hash algorithm OID: ${oid}`);
     }
@@ -56,9 +53,6 @@ export class TSTInfo {
 
   public async verify(data: Uint8Array): Promise<void> {
     const hashAlg = this.messageImprintHashAlgorithm;
-    if (process.env.DEBUG_SIGSTORE) {
-      console.error(`TSTInfo verify - about to hash with algorithm: ${hashAlg}`);
-    }
 
     // Convert hash algorithm name to the format expected by WebCrypto
     const hashAlgName = hashAlg === "sha256" ? "SHA-256" :
