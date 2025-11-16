@@ -3,10 +3,11 @@ import { createHash, webcrypto } from "node:crypto";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { SigstoreBundle } from "../src/bundle.js";
-import { base64ToUint8Array, Uint8ArrayToHex } from "../src/encoding.js";
-import { TrustedRoot } from "../src/interfaces.js";
-import { SigstoreVerifier } from "../src/sigstore.js";
+import { SigstoreBundle } from "./bundle.js";
+import { base64ToUint8Array, Uint8ArrayToHex } from "./encoding.js";
+import { TrustedRoot } from "./interfaces.js";
+import { SigstoreVerifier } from "./sigstore.js";
+import defaultTrustedRoot from "./default-trusted-root.json" with { type: "json" };
 
 // Ensure the global Web Crypto implementation is available when running under Node.js
 if (typeof globalThis.crypto === "undefined") {
@@ -210,12 +211,14 @@ async function verifyBundle(options: CLIOptions): Promise<void> {
 
   const verificationTarget =
     artifact.type === "file" ? artifact.data : bundleDigestBytes;
+  const isDigestOnly = artifact.type === "digest";
 
   await verifier.verifyArtifact(
     options.certificateIdentity,
     options.certificateOidcIssuer,
     bundle,
     verificationTarget,
+    isDigestOnly,
   );
 }
 

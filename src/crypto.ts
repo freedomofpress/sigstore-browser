@@ -7,6 +7,47 @@ import {
 import { EcdsaTypes, HashAlgorithms, KeyTypes } from "./interfaces.js";
 import { toDER } from "./pem.js";
 
+function pkcs1ToSpki(pkcs1Bytes: Uint8Array): Uint8Array {
+  const algorithmIdentifier = new Uint8Array([
+    0x30, 0x0d,
+    0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01,
+    0x05, 0x00
+  ]);
+
+  const bitStringLength = pkcs1Bytes.length + 1;
+  const totalContentLength = algorithmIdentifier.length + 1 + lengthBytes(bitStringLength).length + bitStringLength;
+
+  const result = new Uint8Array(1 + lengthBytes(totalContentLength).length + totalContentLength);
+  let offset = 0;
+
+  result[offset++] = 0x30;
+  const totalLengthBytes = lengthBytes(totalContentLength);
+  result.set(totalLengthBytes, offset);
+  offset += totalLengthBytes.length;
+
+  result.set(algorithmIdentifier, offset);
+  offset += algorithmIdentifier.length;
+
+  result[offset++] = 0x03;
+  const bitStringLengthBytes = lengthBytes(bitStringLength);
+  result.set(bitStringLengthBytes, offset);
+  offset += bitStringLengthBytes.length;
+  result[offset++] = 0x00;
+  result.set(pkcs1Bytes, offset);
+
+  return result;
+}
+
+function lengthBytes(length: number): Uint8Array {
+  if (length < 128) {
+    return new Uint8Array([length]);
+  } else if (length < 256) {
+    return new Uint8Array([0x81, length]);
+  } else {
+    return new Uint8Array([0x82, (length >> 8) & 0xff, length & 0xff]);
+  }
+}
+
 export async function importKey(
   keytype: string,
   scheme: string,
@@ -15,33 +56,32 @@ export async function importKey(
   class importParams {
     format: "raw" | "spki" = "spki";
     keyData: ArrayBuffer = new ArrayBuffer(0);
-    algorithm: {
-      name: "ECDSA" | "Ed25519" | "RSASSA-PKCS1-v1_5" | "RSA-PSS" | "RSA-OAEP";
-      namedCurve?: EcdsaTypes;
-    } = { name: "ECDSA" };
+    algorithm: RsaHashedImportParams | EcKeyImportParams | Algorithm = { name: "ECDSA" };
     extractable: boolean = true;
     usage: Array<KeyUsage> = ["verify"];
   }
 
   const params = new importParams();
-  // Let's try to detect the encoding
   if (key.includes("BEGIN")) {
-    // If it has a begin then it is a PEM
     params.format = "spki";
     params.keyData = toArrayBuffer(toDER(key));
   } else if (/^[0-9A-Fa-f]+$/.test(key)) {
-    // Is it hex?
     params.format = "raw";
     params.keyData = toArrayBuffer(hexToUint8Array(key));
   } else {
-    // It might be base64, without the PEM header, as in sigstore trusted_root
     params.format = "spki";
-    params.keyData = toArrayBuffer(base64ToUint8Array(key));
+    const keyBytes = base64ToUint8Array(key);
+
+    if (keytype.toLowerCase().includes("pkcs1") &&
+        keyBytes[0] === 0x30 && keyBytes[1] === 0x82 &&
+        keyBytes[4] === 0x02 && keyBytes[5] === 0x82) {
+      params.keyData = toArrayBuffer(pkcs1ToSpki(keyBytes));
+    } else {
+      params.keyData = toArrayBuffer(keyBytes);
+    }
   }
 
-  // Let's see supported key types
   if (keytype.toLowerCase().includes("ecdsa")) {
-    // Let'd find out the key size, and retrieve the proper naming for crypto.subtle
     if (scheme.includes("256")) {
       params.algorithm = { name: "ECDSA", namedCurve: EcdsaTypes.P256 };
     } else if (scheme.includes("384")) {
@@ -52,11 +92,19 @@ export async function importKey(
       throw new Error("Cannot determine ECDSA key size.");
     }
   } else if (keytype.toLowerCase().includes("ed25519")) {
-    // Ed2559 eys can be only one size, we do not need more info
     params.algorithm = { name: "Ed25519" };
-  } else if (keytype.toLowerCase().includes("rsa")) {
-    // Is it even worth to think of supporting it?
-    throw new Error("TODO (or maybe not): impleent RSA keys support.");
+  } else if (keytype.toLowerCase().includes("rsa") || keytype.toLowerCase().includes("pkcs1")) {
+    if (scheme.includes("PKCS1") || scheme.includes("RSA_PKCS1")) {
+      params.algorithm = {
+        name: "RSASSA-PKCS1-v1_5",
+        hash: { name: "SHA-256" },
+      };
+    } else {
+      params.algorithm = {
+        name: "RSA-PSS",
+        hash: { name: "SHA-256" },
+      };
+    }
   } else {
     throw new Error(`Unsupported ${keytype}`);
   }
@@ -86,7 +134,6 @@ export async function verifySignature(
   };
 
   if (key.algorithm.name === KeyTypes.Ecdsa) {
-    // Later we need to supply exactly sized R and R dependingont he curve for sig verification
     const namedCurve = (key.algorithm as EcKeyAlgorithm).namedCurve;
     let sig_size = 32;
 
@@ -99,7 +146,6 @@ export async function verifySignature(
     }
 
     options.hash = { name: "" };
-    // Then we need to select an hashing algorithm
     if (hash.includes("256")) {
       options.hash.name = HashAlgorithms.SHA256;
     } else if (hash.includes("384")) {
@@ -110,26 +156,17 @@ export async function verifySignature(
       throw new Error("Cannot determine hashing algorithm;");
     }
 
-    // For posterity: this mess is because the web crypto API supports only
-    // IEEE P1363, so we etract r and s from the DER sig and manually ancode
-    // big endian and append them one after each other
-
-    // The verify option will do hashing internally
-    // const signed_digest = await crypto.subtle.digest(hash_alg, signed)
     let raw_signature: Uint8Array;
     try {
       const asn1_sig = ASN1Obj.parseBuffer(sig);
       const r = asn1_sig.subs[0].toInteger();
       const s = asn1_sig.subs[1].toInteger();
-      // Sometimes the integers can be less than the average, and we would miss bytes. The functione expects a finxed
-      // input in bytes depending on the curve, or it fails early.
       const binr = hexToUint8Array(r.toString(16).padStart(sig_size * 2, "0"));
       const bins = hexToUint8Array(s.toString(16).padStart(sig_size * 2, "0"));
       raw_signature = new Uint8Array(binr.length + bins.length);
       raw_signature.set(binr, 0);
       raw_signature.set(bins, binr.length);
     } catch {
-      // Signature is probably malformed
       return false;
     }
 
@@ -140,12 +177,27 @@ export async function verifySignature(
       toArrayBuffer(signed),
     );
   } else if (key.algorithm.name === KeyTypes.Ed25519) {
-    // No need to specify hash in this case, the crypto API does not take it as input for this key type
     throw new Error(
       "This is untested but could likely work, but not for prod usage :)",
     );
-  } else if (key.algorithm.name === KeyTypes.RSA) {
-    throw new Error("RSA could work, if only someone coded the support :)");
+  } else if (key.algorithm.name === "RSA-PSS") {
+    const saltLength = 32;
+    return await crypto.subtle.verify(
+      {
+        name: "RSA-PSS",
+        saltLength: saltLength,
+      },
+      key,
+      toArrayBuffer(sig),
+      toArrayBuffer(signed),
+    );
+  } else if (key.algorithm.name === "RSASSA-PKCS1-v1_5") {
+    return await crypto.subtle.verify(
+      key.algorithm.name,
+      key,
+      toArrayBuffer(sig),
+      toArrayBuffer(signed),
+    );
   } else {
     throw new Error("Unsupported key type!");
   }

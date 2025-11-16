@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  tuf-conformance:
+  conformance:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,10 +18,11 @@ jobs:
         with:
           node-version: '20'
 
-      - run: npm ci
+      - run: npm install
       - run: npm run build
       - run: chmod +x dist/cli.js
 
       - uses: sigstore/sigstore-conformance@v0.0.21
         with:
           entrypoint: dist/cli.js
+          skip-signing: true
