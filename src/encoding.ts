@@ -92,9 +92,8 @@ export function stringToUint8Array(str: string): Uint8Array {
   return encoder.encode(str);
 }
 
-// This is silly, but it is a hack to be consistent with the original test suite
 export function Uint8ArrayToString(uint8Array: Uint8Array): string {
-  const decoder = new TextDecoder("ascii");
+  const decoder = new TextDecoder("utf-8");
   return decoder.decode(uint8Array);
 }
 
@@ -117,15 +116,18 @@ export function base64Decode(str: string): string {
   return Uint8ArrayToString(base64ToUint8Array(str));
 }
 
+/**
+ * Constant-time equality comparison for Uint8Arrays
+ * Prevents timing attacks by always comparing all bytes
+ */
 export function uint8ArrayEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.byteLength !== b.byteLength) {
     return false;
   }
 
+  let result = 0;
   for (let i = 0; i < a.byteLength; i++) {
-    if (a[i] !== b[i]) {
-      return false;
-    }
+    result |= a[i] ^ b[i];
   }
-  return true;
+  return result === 0;
 }

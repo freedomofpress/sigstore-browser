@@ -214,6 +214,10 @@ export class SigstoreVerifier {
   }
 
   // Adapted from https://github.com/sigstore/sigstore-js/blob/main/packages/verify/src/key/sct.ts
+  // Key differences: validates at least one valid SCT (returns boolean) vs reference which returns array
+  // - Adds duplicate SCT detection
+  // - Adds SCT timestamp validity checking
+  // - Inline CT log filtering by logID and validity period (reference uses filterTLogAuthorities)
   async verifySCT(
     cert: X509Certificate,
     issuer: X509Certificate,
@@ -255,8 +259,8 @@ export class SigstoreVerifier {
 
     // Check for duplicate SCTs (same log ID)
     const seenLogIds = new Set<string>();
-    for (const logId of extSCT.signedCertificateTimestamps.keys()) {
-      const logIdHex = Uint8ArrayToHex(logId);
+    for (const sct of extSCT.signedCertificateTimestamps) {
+      const logIdHex = Uint8ArrayToHex(sct.logID);
       if (seenLogIds.has(logIdHex)) {
         throw new Error(`Duplicate SCT found for log ID: ${logIdHex}`);
       }
@@ -280,8 +284,7 @@ export class SigstoreVerifier {
 
     // Let's iterate over the SCTs, if there are more than one, and see if we can validate at least one
     let lastError: any = null;
-    for (const logId of extSCT.signedCertificateTimestamps.keys()) {
-      const sct = extSCT.signedCertificateTimestamps[logId];
+    for (const sct of extSCT.signedCertificateTimestamps) {
 
       // SCT should be within certificate validity period
       if (sct.datetime < cert.notBefore || sct.datetime > cert.notAfter) {

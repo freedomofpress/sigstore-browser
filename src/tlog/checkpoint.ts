@@ -20,8 +20,8 @@ Follows the signed note format specification:
 https://github.com/transparency-dev/formats/blob/main/log/README.md
 */
 
-import { base64ToUint8Array, stringToUint8Array, uint8ArrayEqual, Uint8ArrayToHex } from "../encoding.js";
-import { verifySignature } from "../crypto.js";
+import { base64ToUint8Array, stringToUint8Array, toArrayBuffer, uint8ArrayEqual, Uint8ArrayToHex } from "../encoding.js";
+import { importKey, verifySignature } from "../crypto.js";
 import type { TLogEntry } from "../bundle.js";
 import type { RawLogs } from "../interfaces.js";
 
@@ -205,8 +205,6 @@ async function verifyRawSignature(
   signed: Uint8Array,
   rawSig: Uint8Array,
 ): Promise<boolean> {
-  const { toArrayBuffer } = await import("../encoding.js");
-
   return await crypto.subtle.verify(
     key.algorithm.name,
     key,
@@ -229,8 +227,6 @@ function filterTLogsByDate(tlogs: RawLogs, targetDate: Date): RawLogs {
 
 // Browser-compatible key import supporting multiple formats (not in sigstore-js reference)
 async function importTLogKey(tlog: RawLogs[0]): Promise<CryptoKey> {
-  const { importKey } = await import("../crypto.js");
-
   // Parse keyDetails to extract key type and scheme
   // Formats can be:
   // - "PKIX_ECDSA_P256_SHA_256" (production format)
