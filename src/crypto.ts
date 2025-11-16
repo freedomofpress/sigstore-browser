@@ -3,9 +3,12 @@ import {
   base64ToUint8Array,
   hexToUint8Array,
   toArrayBuffer,
+  Uint8ArrayToHex,
 } from "./encoding.js";
 import { EcdsaTypes, HashAlgorithms, KeyTypes } from "./interfaces.js";
 import { toDER } from "./pem.js";
+import pkg from "elliptic";
+const { ec: EC } = pkg;
 
 function pkcs1ToSpki(pkcs1Bytes: Uint8Array): Uint8Array {
   const algorithmIdentifier = new Uint8Array([
@@ -203,13 +206,68 @@ export async function verifySignature(
   }
 }
 
-export function bufferEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.byteLength !== b.byteLength) {
+export async function verifySignatureOverDigest(
+  key: CryptoKey,
+  digest: Uint8Array,
+  sig: Uint8Array,
+): Promise<boolean> {
+  if (key.algorithm.name !== KeyTypes.Ecdsa) {
+    throw new Error("verifySignatureOverDigest only supports ECDSA keys");
+  }
+
+  const namedCurve = (key.algorithm as EcKeyAlgorithm).namedCurve;
+  let curveName: string;
+  let sig_size: number;
+
+  if (namedCurve === "P-256") {
+    curveName = "p256";
+    sig_size = 32;
+  } else if (namedCurve === "P-384") {
+    curveName = "p384";
+    sig_size = 48;
+  } else if (namedCurve === "P-521") {
+    curveName = "p521";
+    sig_size = 66;
+  } else {
+    throw new Error(`Unsupported curve: ${namedCurve}`);
+  }
+
+  const ec = new EC(curveName);
+
+  // Parse the DER-encoded signature to extract r and s
+  let r: bigint;
+  let s: bigint;
+  try {
+    const asn1_sig = ASN1Obj.parseBuffer(sig);
+    r = asn1_sig.subs[0].toInteger();
+    s = asn1_sig.subs[1].toInteger();
+  } catch {
     return false;
   }
 
-  for (let i = 0; i < a.byteLength; i++) {
-    if (a[i] !== b[i]) return false;
+  // Export the public key to get x and y coordinates
+  const jwk = await crypto.subtle.exportKey("jwk", key);
+  if (!jwk.x || !jwk.y) {
+    throw new Error("Invalid ECDSA public key: missing x or y coordinates");
   }
-  return true;
+
+  // Convert base64url JWK coordinates to hex
+  const x = Buffer.from(jwk.x, "base64").toString("hex");
+  const y = Buffer.from(jwk.y, "base64").toString("hex");
+
+  // Create elliptic key from public key coordinates
+  const eckey = ec.keyFromPublic({ x, y }, "hex");
+
+  // Convert digest to hex string for elliptic
+  const digestHex = Uint8ArrayToHex(digest);
+
+  // Verify the signature over the digest
+  const signature = {
+    r: r.toString(16).padStart(sig_size * 2, "0"),
+    s: s.toString(16).padStart(sig_size * 2, "0"),
+  };
+
+  return eckey.verify(digestHex, signature);
 }
+
+export { uint8ArrayEqual as bufferEqual } from "./encoding.js";

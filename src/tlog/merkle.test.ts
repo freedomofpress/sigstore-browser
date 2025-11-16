@@ -152,7 +152,7 @@ describe("Merkle tree verification", () => {
     };
 
     await expect(verifyMerkleInclusion(entry)).rejects.toThrow(
-      "Invalid inclusion proof"
+      "Invalid hash count in inclusion proof"
     );
   });
 });

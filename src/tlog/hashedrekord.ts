@@ -108,6 +108,8 @@ function verifyHashedRekordV002Body(
     throw new Error("Bundle missing messageSignature for hashedrekord v0.0.2 entry");
   }
 
+  // NOTE: HashedRekord v0.0.2 uses single base64 encoding (unlike intoto which is double-encoded)
+  // Verified against Sigstore conformance test suite bundles
   const tlogSig = spec.signature.content || "";
   const tlogSigBytes = base64ToUint8Array(tlogSig);
   const bundleSigBytes = base64ToUint8Array(bundle.messageSignature.signature);

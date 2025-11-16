@@ -4,7 +4,7 @@ import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { SigstoreBundle } from "./bundle.js";
-import { base64ToUint8Array, Uint8ArrayToHex } from "./encoding.js";
+import { base64ToUint8Array, hexToUint8Array, Uint8ArrayToHex, Uint8ArrayToString } from "./encoding.js";
 import { TrustedRoot } from "./interfaces.js";
 import { SigstoreVerifier } from "./sigstore.js";
 import defaultTrustedRoot from "./default-trusted-root.json" with { type: "json" };
@@ -193,20 +193,44 @@ async function verifyBundle(options: CLIOptions): Promise<void> {
   const verifier = new SigstoreVerifier();
   await verifier.loadSigstoreRoot(trustedRoot);
 
-  if (!bundle.messageSignature) {
-    throw new Error("Bundle does not contain a message signature");
-  }
+  // Extract and verify the artifact digest from the bundle
+  let bundleDigestHex: string;
+  let bundleDigestBytes: Uint8Array;
 
-  if (bundle.messageSignature.messageDigest.algorithm !== "SHA2_256") {
-    throw new Error(
-      `Unsupported message digest algorithm: ${bundle.messageSignature.messageDigest.algorithm}`,
+  if (bundle.messageSignature) {
+    // Regular bundle: digest is in messageSignature
+    if (bundle.messageSignature.messageDigest.algorithm !== "SHA2_256") {
+      throw new Error(
+        `Unsupported message digest algorithm: ${bundle.messageSignature.messageDigest.algorithm}`,
+      );
+    }
+
+    bundleDigestBytes = base64ToUint8Array(
+      bundle.messageSignature.messageDigest.digest,
     );
-  }
+    bundleDigestHex = Uint8ArrayToHex(bundleDigestBytes).toLowerCase();
+  } else if (bundle.dsseEnvelope) {
+    // DSSE bundle: digest is in the in-toto statement payload
+    const payloadBytes = base64ToUint8Array(bundle.dsseEnvelope.payload);
+    const payload = JSON.parse(Uint8ArrayToString(payloadBytes));
 
-  const bundleDigestBytes = base64ToUint8Array(
-    bundle.messageSignature.messageDigest.digest,
-  );
-  const bundleDigestHex = Uint8ArrayToHex(bundleDigestBytes).toLowerCase();
+    if (!payload.subject || payload.subject.length === 0) {
+      throw new Error("DSSE payload has no subject");
+    }
+
+    bundleDigestHex = payload.subject[0].digest?.["sha256"];
+    if (!bundleDigestHex) {
+      throw new Error("DSSE payload subject has no SHA256 digest");
+    }
+
+    // Normalize to lowercase for comparison
+    bundleDigestHex = bundleDigestHex.toLowerCase();
+
+    // Convert hex digest to bytes for verification target
+    bundleDigestBytes = hexToUint8Array(bundleDigestHex);
+  } else {
+    throw new Error("Bundle does not contain a message signature or DSSE envelope");
+  }
 
   if (artifact.digestHex !== bundleDigestHex) {
     throw new Error(
