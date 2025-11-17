@@ -331,14 +331,36 @@ export class SigstoreVerifier {
     bundle: SigstoreBundle,
     rekor: CryptoKey | undefined,
   ): Promise<boolean> {
-    // We support and expect only one entry
-    if (bundle.verificationMaterial.tlogEntries.length < 1) {
+    const entries = bundle.verificationMaterial.tlogEntries;
+
+    if (entries.length < 1) {
       throw new Error(
         "Failed to find a transparency log entry in the provided bundle.",
       );
     }
 
-    const entry = bundle.verificationMaterial.tlogEntries[0];
+    // Prevent DoS via excessive entries and threshold bypass via duplicates
+    // Matches sigstore-go limits (verify/tlog.go:46-57)
+    const MAX_TLOG_ENTRIES = 32;
+    if (entries.length > MAX_TLOG_ENTRIES) {
+      throw new Error(
+        `Too many tlog entries: ${entries.length} > ${MAX_TLOG_ENTRIES}`,
+      );
+    }
+
+    for (let i = 0; i < entries.length; i++) {
+      for (let j = i + 1; j < entries.length; j++) {
+        const iLogId = Uint8ArrayToHex(base64ToUint8Array(entries[i].logId.keyId));
+        const jLogId = Uint8ArrayToHex(base64ToUint8Array(entries[j].logId.keyId));
+        if (iLogId === jLogId && entries[i].logIndex === entries[j].logIndex) {
+          throw new Error(
+            `Duplicate tlog entry found: logID=${iLogId}, logIndex=${entries[i].logIndex}`,
+          );
+        }
+      }
+    }
+
+    const entry = entries[0];
 
     // Extract bundle version from mediaType
     // e.g., "application/vnd.dev.sigstore.bundle+json;version=0.2"
