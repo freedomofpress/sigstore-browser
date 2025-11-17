@@ -125,7 +125,8 @@ export class SigstoreVerifier {
       ) {
         let parentCert: X509Certificate | undefined = undefined;
         let currentCert: X509Certificate | undefined = undefined;
-        for (const cert of tsa.certChain.certificates.reverse()) {
+        // Use slice() to avoid mutating the original array
+        for (const cert of tsa.certChain.certificates.slice().reverse()) {
           currentCert = X509Certificate.parse(base64ToUint8Array(cert.rawBytes));
 
           if (parentCert == undefined) {
@@ -159,7 +160,8 @@ export class SigstoreVerifier {
       ) {
         let parentCert: X509Certificate | undefined = undefined;
         let currentCert: X509Certificate | undefined = undefined;
-        for (const cert of ca.certChain.certificates.reverse()) {
+        // Use slice() to avoid mutating the original array
+        for (const cert of ca.certChain.certificates.slice().reverse()) {
           currentCert = X509Certificate.parse(base64ToUint8Array(cert.rawBytes));
 
           if (parentCert == undefined) {
