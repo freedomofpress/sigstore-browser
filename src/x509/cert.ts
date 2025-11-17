@@ -17,7 +17,7 @@ import { ASN1Obj } from "../asn1/index.js";
 import { bufferEqual, importKey, verifySignature } from "../crypto.js";
 import { Uint8ArrayToBase64 } from "../encoding.js";
 import { KeyTypes } from "../interfaces.js";
-import { ECDSA_CURVE_NAMES, ECDSA_SIGNATURE_ALGOS } from "../oid.js";
+import { ECDSA_CURVE_NAMES, ECDSA_SIGNATURE_ALGOS, RSA_SIGNATURE_ALGOS } from "../oid.js";
 import * as pem from "../pem.js";
 import {
   X509AuthorityKeyIDExtension,
@@ -91,15 +91,23 @@ export class X509Certificate {
     return this.subjectPublicKeyInfoObj.toDER();
   }
 
-  get publicKeyObj(): Promise<CryptoKey> {
+  /**
+   * Import the public key with a specific hash algorithm for RSA keys
+   * For ECDSA keys, the hash parameter is ignored
+   */
+  public async getPublicKeyObj(hashAlg?: string): Promise<CryptoKey> {
     const publicKey = this.subjectPublicKeyInfoObj.toDER();
     const spki = ASN1Obj.parseBuffer(publicKey);
     const algorithmOID = spki.subs[0].subs[0].toOID();
 
     // Check if it's an RSA key (OID 1.2.840.113549.1.1.1)
     if (algorithmOID === "1.2.840.113549.1.1.1") {
-      // RSA key
-      return importKey("RSA", "RSA_PKCS1V5", Uint8ArrayToBase64(publicKey));
+      // RSA key - use provided hash or default to SHA-256
+      const hash = hashAlg || "sha256";
+      const scheme = hash.includes("256") ? "SHA256" :
+                     hash.includes("384") ? "SHA384" :
+                     hash.includes("512") ? "SHA512" : "SHA256";
+      return importKey("RSA", `RSA_PKCS1V5_${scheme}`, Uint8ArrayToBase64(publicKey));
     } else {
       // ECDSA key - the curve OID is in the second element
       const curveOID = spki.subs[0].subs[1]?.toOID();
@@ -108,6 +116,10 @@ export class X509Certificate {
       // This might be a P-384 cert where the curve is specified differently
       return importKey(KeyTypes.Ecdsa, curve || "P-384", Uint8ArrayToBase64(publicKey));
     }
+  }
+
+  get publicKeyObj(): Promise<CryptoKey> {
+    return this.getPublicKeyObj();
   }
 
   get signatureAlgorithm(): string {
@@ -191,10 +203,16 @@ export class X509Certificate {
   }
 
   public async verify(issuerCertificate?: X509Certificate): Promise<boolean> {
-    // Use the issuer's public key if provided, otherwise use the subject's
-    // We should probably check notbefore/notafter here
-    const publicKeyObj =
-      (await issuerCertificate?.publicKeyObj) || (await this.publicKeyObj);
+    // Extract the hash algorithm from this certificate's signature algorithm
+    // (not the issuer's own signature algorithm)
+    const sigAlgOID = this.signatureAlgorithmObj.subs[0].toOID();
+    const hashAlg = RSA_SIGNATURE_ALGOS[sigAlgOID] || ECDSA_SIGNATURE_ALGOS[sigAlgOID];
+
+    // Use the issuer's public key if provided, otherwise use the subject's (for self-signed certs)
+    // Import with the correct hash algorithm for this certificate's signature
+    const publicKeyObj = issuerCertificate
+      ? await issuerCertificate.getPublicKeyObj(hashAlg)
+      : await this.getPublicKeyObj(hashAlg);
 
     return await verifySignature(
       publicKeyObj,

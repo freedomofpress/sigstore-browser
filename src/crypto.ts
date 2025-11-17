@@ -97,15 +97,26 @@ export async function importKey(
   } else if (keytype.toLowerCase().includes("ed25519")) {
     params.algorithm = { name: "Ed25519" };
   } else if (keytype.toLowerCase().includes("rsa") || keytype.toLowerCase().includes("pkcs1")) {
+    let hashName = "SHA-256";
+    // Normalize scheme to handle various formats: SHA256, SHA_256, SHA-256, etc.
+    const normalizedScheme = scheme.toUpperCase().replace(/[-_]/g, "");
+    if (normalizedScheme.includes("SHA256") || normalizedScheme.includes("256")) {
+      hashName = "SHA-256";
+    } else if (normalizedScheme.includes("SHA384") || normalizedScheme.includes("384")) {
+      hashName = "SHA-384";
+    } else if (normalizedScheme.includes("SHA512") || normalizedScheme.includes("512")) {
+      hashName = "SHA-512";
+    }
+
     if (scheme.includes("PKCS1") || scheme.includes("RSA_PKCS1")) {
       params.algorithm = {
         name: "RSASSA-PKCS1-v1_5",
-        hash: { name: "SHA-256" },
+        hash: { name: hashName },
       };
     } else {
       params.algorithm = {
         name: "RSA-PSS",
-        hash: { name: "SHA-256" },
+        hash: { name: hashName },
       };
     }
   } else {
@@ -186,7 +197,11 @@ export async function verifySignature(
       "Ed25519 signature verification not implemented in generic verifySignature. Use verifyRawSignature for Ed25519.",
     );
   } else if (key.algorithm.name === "RSA-PSS") {
-    const saltLength = 32;
+    // Salt length must match the hash output size
+    const hashAlg = (key.algorithm as RsaHashedKeyAlgorithm).hash.name;
+    const saltLength = hashAlg === "SHA-256" ? 32 :
+                       hashAlg === "SHA-384" ? 48 :
+                       hashAlg === "SHA-512" ? 64 : 32;
     return await crypto.subtle.verify(
       {
         name: "RSA-PSS",
