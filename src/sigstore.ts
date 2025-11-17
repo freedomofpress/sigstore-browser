@@ -216,15 +216,16 @@ export class SigstoreVerifier {
   }
 
   // Adapted from https://github.com/sigstore/sigstore-js/blob/main/packages/verify/src/key/sct.ts
-  // Key differences: validates at least one valid SCT (returns boolean) vs reference which returns array
+  // Key differences:
   // - Adds duplicate SCT detection
   // - Adds SCT timestamp validity checking
   // - Inline CT log filtering by logID and validity period (reference uses filterTLogAuthorities)
+  // - Returns array of verified SCT logIDs for threshold checking (matches reference behavior)
   async verifySCT(
     cert: X509Certificate,
     issuer: X509Certificate,
     ctlogs: CTLog[],
-  ): Promise<boolean> {
+  ): Promise<Uint8Array[]> {
     let extSCT: X509SCTExtension | undefined;
 
     // Verifying the SCT requires that we remove the SCT extension and
@@ -284,14 +285,13 @@ export class SigstoreVerifier {
     preCert.appendUint24(tbs.length);
     preCert.appendView(tbs);
 
-    // Let's iterate over the SCTs, if there are more than one, and see if we can validate at least one
-    let lastError: any = null;
-    for (const sct of extSCT.signedCertificateTimestamps) {
+    // Collect all verified SCTs to check against threshold
+    const verifiedSCTs: Uint8Array[] = [];
 
+    for (const sct of extSCT.signedCertificateTimestamps) {
       // SCT should be within certificate validity period
       if (sct.datetime < cert.notBefore || sct.datetime > cert.notAfter) {
-        lastError = new Error(`SCT timestamp is invalid: SCT datetime ${sct.datetime}, cert notBefore ${cert.notBefore}, cert notAfter ${cert.notAfter}`);
-        continue; // Try next SCT instead of throwing immediately
+        continue; // Skip invalid SCT timestamp, don't fail yet
       }
 
       // Find the CT log that matches this SCT's log ID and is valid for the SCT datetime
@@ -306,21 +306,24 @@ export class SigstoreVerifier {
       });
 
       // Try to verify with any valid CT log
+      let verified = false;
       for (const log of validCTLogs) {
         try {
           if (await sct.verify(preCert.buffer, log.publicKey)) {
-            return true;
+            verified = true;
+            break; // Found a valid log for this SCT
           }
         } catch (e) {
-          lastError = e;
+          // Continue trying other logs
         }
       }
 
-      if (validCTLogs.length === 0) {
-        lastError = new Error(`No valid CT log found for SCT with log ID ${Uint8ArrayToHex(sct.logID)}`);
+      if (verified) {
+        verifiedSCTs.push(sct.logID);
       }
     }
-    throw new Error(`SCT verification failed: ${lastError?.message || 'No valid SCTs found'}`);
+
+    return verifiedSCTs;
   }
 
   async verifyInclusionPromise(
@@ -557,10 +560,11 @@ export class SigstoreVerifier {
 
     // # 3 To verify the SCT we need to build a preCert (because the cert was logged without the SCT)
     // https://github.com/sigstore/sigstore-js/packages/verify/src/key/sct.ts#L45
-    if (
-      !(await this.verifySCT(signingCert, this.root.fulcio, this.root.ctlogs))
-    ) {
-      throw new Error("SCT validation failed.");
+    const verifiedSCTs = await this.verifySCT(signingCert, this.root.fulcio, this.root.ctlogs);
+    if (verifiedSCTs.length < this.options.ctlogThreshold) {
+      throw new Error(
+        `Not enough valid SCTs: found ${verifiedSCTs.length}, required ${this.options.ctlogThreshold}`
+      );
     }
 
     // # 4 Rekor inclusion promise
