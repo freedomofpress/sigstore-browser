@@ -247,14 +247,14 @@ export class SigstoreVerifier {
       }
     }
 
-    // No SCT extension found to verify - this is OK, return true
+    // No SCT extension found - fail verification
     if (!extSCT) {
-      return true;
+      throw new Error("Certificate is missing required SCT extension");
     }
 
-    // Found an SCT extension but it has no SCTs - this is OK, return true
+    // Found an SCT extension but it has no SCTs - fail verification
     if (extSCT.signedCertificateTimestamps.length === 0) {
-      return true;
+      throw new Error("SCT extension is present but contains no SCTs");
     }
 
     // Check for duplicate SCTs (same log ID)
@@ -600,14 +600,9 @@ export class SigstoreVerifier {
       const payloadBytes = base64ToUint8Array(bundle.dsseEnvelope.payload);
       const payload = JSON.parse(Uint8ArrayToString(payloadBytes));
 
-      // Verify the artifact digest matches the subject in the in-toto statement
+      // Verify the artifact digest matches a subject in the in-toto statement
       if (!payload.subject || payload.subject.length === 0) {
         throw new Error("DSSE payload has no subject");
-      }
-
-      const subjectDigest = payload.subject[0].digest?.["sha256"];
-      if (!subjectDigest) {
-        throw new Error("DSSE payload subject has no SHA256 digest");
       }
 
       // Compute or extract the artifact digest
@@ -622,8 +617,20 @@ export class SigstoreVerifier {
         );
       }
 
-      if (artifactDigest !== subjectDigest) {
-        throw new Error("Artifact digest does not match DSSE payload subject digest");
+      // Find matching subject by scanning all subjects (not just [0])
+      let matchedSubject = null;
+      for (const subject of payload.subject) {
+        const subjectDigest = subject.digest?.["sha256"];
+        if (subjectDigest && artifactDigest === subjectDigest.toLowerCase()) {
+          matchedSubject = subject;
+          break;
+        }
+      }
+
+      if (!matchedSubject) {
+        throw new Error(
+          `Artifact digest ${artifactDigest} does not match any subject in DSSE payload`
+        );
       }
 
       // Create PAE (Pre-Authentication Encoding) for signature verification

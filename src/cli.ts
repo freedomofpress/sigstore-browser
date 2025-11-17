@@ -223,13 +223,23 @@ async function verifyBundle(options: CLIOptions): Promise<void> {
       throw new Error("DSSE payload has no subject");
     }
 
-    bundleDigestHex = payload.subject[0].digest?.["sha256"];
-    if (!bundleDigestHex) {
-      throw new Error("DSSE payload subject has no SHA256 digest");
+    // Find matching subject by comparing artifact digest with all subjects
+    let matchedSubject = null;
+    for (const subject of payload.subject) {
+      const subjectDigest = subject.digest?.["sha256"];
+      if (subjectDigest && artifact.digestHex === subjectDigest.toLowerCase()) {
+        matchedSubject = subject;
+        break;
+      }
     }
 
-    // Normalize to lowercase for comparison
-    bundleDigestHex = bundleDigestHex.toLowerCase();
+    if (!matchedSubject) {
+      throw new Error(
+        `Artifact digest ${artifact.digestHex} does not match any subject in DSSE payload`
+      );
+    }
+
+    bundleDigestHex = matchedSubject.digest["sha256"].toLowerCase();
 
     // Convert hex digest to bytes for verification target
     bundleDigestBytes = hexToUint8Array(bundleDigestHex);
@@ -237,7 +247,8 @@ async function verifyBundle(options: CLIOptions): Promise<void> {
     throw new Error("Bundle does not contain a message signature or DSSE envelope");
   }
 
-  if (artifact.digestHex !== bundleDigestHex) {
+  // For non-DSSE bundles, verify the digest matches
+  if (bundle.messageSignature && artifact.digestHex !== bundleDigestHex) {
     throw new Error(
       "Artifact digest does not match the digest embedded in the bundle.",
     );
