@@ -453,9 +453,14 @@ export class SigstoreVerifier {
       // DSSE entries store signatures differently
       // The certificate is verified through the bundle's verification material
       // No additional check needed here
+    } else if (bodyJson.kind === "intoto") {
+      // Intoto entries are DSSE-based and don't store certificates in the tlog entry
+      // The certificate is part of the bundle's verification material which has already
+      // been verified against the CA root. The intoto verification in tlog/intoto.ts
+      // verifies the signature and payload hash match between the tlog and bundle.
     } else {
-      // For other entry types, skip certificate matching for now
-      // This may need to be extended for other entry types in the future
+      // Unknown entry type - this should not happen with standard Sigstore bundles
+      throw new Error(`Unsupported tlog entry kind: ${bodyJson.kind}`);
     }
 
     return true;
