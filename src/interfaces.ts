@@ -42,8 +42,13 @@ export interface CTLog {
   };
 }
 
+export interface RekorKeyInfo {
+  publicKey: CryptoKey;
+  logId: Uint8Array;
+}
+
 export interface Sigstore {
-  rekor: CryptoKey | undefined;
+  rekor: RekorKeyInfo | undefined;
   ctlogs: CTLog[];
   fulcio: X509Certificate;
   // This is theoretically supported, but not implemented in the community sigstore

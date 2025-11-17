@@ -6,6 +6,7 @@ import {
   base64ToUint8Array,
   stringToUint8Array,
   toArrayBuffer,
+  uint8ArrayEqual,
   Uint8ArrayToHex,
   Uint8ArrayToString,
 } from "./encoding.js";
@@ -14,6 +15,7 @@ import {
   RawCAs,
   RawLogs,
   RawTimestampAuthorities,
+  RekorKeyInfo,
   Sigstore,
   SigstoreRoots,
   TrustedRoot,
@@ -51,10 +53,10 @@ export class SigstoreVerifier {
     };
   }
 
-  async loadLog(frozenTimestamp: Date, logs: RawLogs): Promise<CryptoKey | undefined> {
-    // We will stop at the first valid one
-    // We do not support more than one valid one at a time, not sure if Sigstore does
-    // But it probably do to verify past artifacts: otherwise things still valid today might be discarded
+  async loadLog(frozenTimestamp: Date, logs: RawLogs): Promise<RekorKeyInfo | undefined> {
+    // Load the first Rekor transparency log key that's valid at the frozen timestamp
+    // and store its log ID for verification. This matches sigstore-go's approach of
+    // looking up the verifier by log ID (verify/tlog.go:80-83).
 
     for (const log of logs) {
       // if start date is not in the future, and if an end doesn't exist or is in the future
@@ -63,11 +65,14 @@ export class SigstoreVerifier {
         (!log.publicKey.validFor.end ||
           new Date(log.publicKey.validFor.end) > frozenTimestamp)
       ) {
-        return await importKey(
-          log.publicKey.keyDetails,
-          log.publicKey.keyDetails,
-          log.publicKey.rawBytes,
-        );
+        return {
+          publicKey: await importKey(
+            log.publicKey.keyDetails,
+            log.publicKey.keyDetails,
+            log.publicKey.rawBytes,
+          ),
+          logId: base64ToUint8Array(log.logId.keyId),
+        };
       }
     }
 
@@ -329,7 +334,7 @@ export class SigstoreVerifier {
   async verifyInclusionPromise(
     cert: X509Certificate,
     bundle: SigstoreBundle,
-    rekor: CryptoKey | undefined,
+    rekor: RekorKeyInfo | undefined,
   ): Promise<boolean> {
     const entries = bundle.verificationMaterial.tlogEntries;
 
@@ -396,11 +401,19 @@ export class SigstoreVerifier {
           throw new Error("Rekor public key not found in trusted root");
         }
 
+        // Verify the log ID matches (matches sigstore-go verify/tlog.go:80-83)
+        const entryLogId = base64ToUint8Array(entry.logId.keyId);
+        if (!uint8ArrayEqual(rekor.logId, entryLogId)) {
+          throw new Error(
+            `Rekor log ID mismatch: bundle uses ${Uint8ArrayToHex(entryLogId)} but loaded key is for ${Uint8ArrayToHex(rekor.logId)}`
+          );
+        }
+
         const signature = base64ToUint8Array(
           entry.inclusionPromise.signedEntryTimestamp,
         );
 
-        const keyId = Uint8ArrayToHex(base64ToUint8Array(entry.logId.keyId));
+        const keyId = Uint8ArrayToHex(entryLogId);
         const integratedTime = Number(entry.integratedTime);
 
         const signed = stringToUint8Array(
@@ -412,7 +425,7 @@ export class SigstoreVerifier {
           }),
         );
 
-        if (!(await verifySignature(rekor, signed, signature))) {
+        if (!(await verifySignature(rekor.publicKey, signed, signature))) {
           throw new Error(
             "Failed to verify the inclusion promise in the provided bundle.",
           );
