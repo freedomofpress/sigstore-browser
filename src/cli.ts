@@ -7,7 +7,7 @@ import { SigstoreBundle } from "./bundle.js";
 import { base64ToUint8Array, hexToUint8Array, Uint8ArrayToHex, Uint8ArrayToString } from "./encoding.js";
 import { TrustedRoot } from "./interfaces.js";
 import { SigstoreVerifier } from "./sigstore.js";
-import defaultTrustedRoot from "./default-trusted-root.json" with { type: "json" };
+import { TrustedRootProvider } from "./trust/tuf.js";
 
 // Ensure the global Web Crypto implementation is available when running under Node.js
 if (typeof globalThis.crypto === "undefined") {
@@ -170,7 +170,12 @@ async function loadTrustedRoot(
   pathInput: string | undefined,
 ): Promise<TrustedRoot> {
   if (!pathInput) {
-    return defaultTrustedRoot as TrustedRoot;
+    // Use TUF to fetch the latest trusted root (matches sigstore-js behavior)
+    const tufProvider = new TrustedRootProvider({
+      metadataUrl: "https://tuf-repo-cdn.sigstore.dev/",
+      targetBaseUrl: "https://tuf-repo-cdn.sigstore.dev/targets/",
+    });
+    return await tufProvider.getTrustedRoot();
   }
   const resolvedPath = path.resolve(pathInput);
   const raw = await readFile(resolvedPath, "utf8");

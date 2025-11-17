@@ -17,9 +17,11 @@ This directory contains trust material for Sigstore verification.
 
 **Updates**: Should be updated when sigstore-js updates its embedded TUF root. Check the sigstore-js repository for the latest version.
 
-## Relationship to default-trusted-root.json
+## Trust Material Flow
 
-- **tuf-root.json**: Root of trust for TUF itself (verifies TUF metadata)
-- **default-trusted-root.json**: Sigstore trust material (CAs, CT logs, TLogs, TSAs) delivered via TUF
+1. **TUF Bootstrap**: `tuf-root.json` → TUF client initialization
+2. **TUF Metadata Updates**: TUF client fetches and verifies latest metadata
+3. **Sigstore Trust Material**: TUF delivers `trusted_root.json` (CAs, CT logs, TLogs, TSAs)
+4. **Verification**: Sigstore verifier uses the trust material to verify signatures
 
-These are two distinct files serving different purposes in the trust chain.
+This matches the sigstore-js architecture: TUF provides always up-to-date trust material rather than using static embedded files that can become outdated.
