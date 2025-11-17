@@ -191,10 +191,14 @@ export async function verifySignature(
       toArrayBuffer(signed),
     );
   } else if (key.algorithm.name === KeyTypes.Ed25519) {
-    // Ed25519 verification is handled separately for checkpoint signatures
-    // This path is not used in practice since Fulcio only issues ECDSA certificates
-    throw new Error(
-      "Ed25519 signature verification not implemented in generic verifySignature. Use verifyRawSignature for Ed25519.",
+    // Ed25519 uses raw signatures (not DER-encoded like ECDSA)
+    // Fulcio supports Ed25519, ECDSA, and RSA_PSS for signing certificates
+    // Ed25519 is also used for checkpoint signatures in TLog configurations
+    return await crypto.subtle.verify(
+      key.algorithm.name,
+      key,
+      toArrayBuffer(sig),
+      toArrayBuffer(signed),
     );
   } else if (key.algorithm.name === "RSA-PSS") {
     // Salt length must match the hash output size

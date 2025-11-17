@@ -11,7 +11,6 @@ Key differences:
 - Inline key import from raw bytes
 
 Additional functionality not in reference:
-- verifyRawSignature() - new function for ED25519 raw signature support
 - filterTLogsByDate() - inlined from sigstore-js/packages/verify/src/trust/filter.ts
 - importTLogKey() - new browser-compatible key import with multiple format support
 - Special handling for Rekor v2 bundles without integratedTime
@@ -174,22 +173,14 @@ async function verifySignedNote(
 
     const publicKey = await importTLogKey(tlog);
 
+    // Both ED25519 and ECDSA verification are now handled by verifySignature
     // ED25519 signatures are raw (64 bytes), ECDSA signatures are DER-encoded
-    const isEd25519 = tlog.publicKey.keyDetails.includes("ED25519");
-    let verified: boolean;
-
-    if (isEd25519) {
-      // ED25519 uses raw signatures
-      verified = await verifyRawSignature(publicKey, data, signature.signature);
-    } else {
-      // ECDSA uses DER-encoded signatures
-      verified = await verifySignature(
-        publicKey,
-        data,
-        signature.signature,
-        tlog.hashAlgorithm
-      );
-    }
+    const verified = await verifySignature(
+      publicKey,
+      data,
+      signature.signature,
+      tlog.hashAlgorithm
+    );
 
     if (verified) {
       hasValidSignature = true;
@@ -199,19 +190,6 @@ async function verifySignedNote(
   return hasValidSignature;
 }
 
-// New function for ED25519 raw signature verification (not in sigstore-js reference)
-async function verifyRawSignature(
-  key: CryptoKey,
-  signed: Uint8Array,
-  rawSig: Uint8Array,
-): Promise<boolean> {
-  return await crypto.subtle.verify(
-    key.algorithm.name,
-    key,
-    toArrayBuffer(rawSig),
-    toArrayBuffer(signed),
-  );
-}
 
 // Inlined from sigstore-js/packages/verify/src/trust/filter.ts
 function filterTLogsByDate(tlogs: RawLogs, targetDate: Date): RawLogs {
