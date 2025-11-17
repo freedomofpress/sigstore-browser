@@ -26,7 +26,7 @@ export interface TLogEntry {
   logIndex: string;
   logId: LogId;
   kindVersion: KindVersion;
-  integratedTime: string; // UNIX timestamp
+  integratedTime: string | null; // UNIX timestamp (can be null for Rekor v2 bundles)
   inclusionPromise?: InclusionPromise;
   inclusionProof?: InclusionProof;
   canonicalizedBody: string; // Base64-encoded JSON body of the log entry

@@ -129,11 +129,18 @@ export async function verifyCheckpoint(
     throw new Error("Missing checkpoint in inclusion proof");
   }
 
-  // For Rekor v2 bundles, integratedTime may be null
-  // In that case, skip date filtering to allow historical TLog keys
+  // Filter by log ID first (matches entry's log ID)
+  const entryLogId = base64ToUint8Array(entry.logId.keyId);
+  const matchingTLogs = tlogs.filter((tlog) => {
+    const tlogId = base64ToUint8Array(tlog.logId.keyId);
+    return uint8ArrayEqual(tlogId, entryLogId);
+  });
+
+  // Then filter by date if integratedTime is available
+  // For Rekor v2 bundles, integratedTime may be null, so we skip date filtering
   const validTLogs = entry.integratedTime
-    ? filterTLogsByDate(tlogs, new Date(Number(entry.integratedTime) * 1000))
-    : tlogs;
+    ? filterTLogsByDate(matchingTLogs, new Date(Number(entry.integratedTime) * 1000))
+    : matchingTLogs;
 
   const inclusionProof = entry.inclusionProof;
   const signedNote = SignedNote.fromString(inclusionProof.checkpoint.envelope);
