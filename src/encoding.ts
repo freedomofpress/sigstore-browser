@@ -41,10 +41,18 @@ export function base64ToUint8Array(base64: string): Uint8Array {
   const bytes = new Uint8Array(length);
 
   for (let i = 0; i < length; i++) {
-    bytes[i] = binaryString.charCodeAt(i); // Convert binary string to byte array
+    bytes[i] = binaryString.charCodeAt(i);
   }
 
   return bytes;
+}
+
+export function base64UrlToUint8Array(base64url: string): Uint8Array {
+  let base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+  while (base64.length % 4 !== 0) {
+    base64 += '=';
+  }
+  return base64ToUint8Array(base64);
 }
 
 export function Uint8ArrayToBase64(uint8Array: Uint8Array): string {
