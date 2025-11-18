@@ -8,8 +8,7 @@ import {
 } from "./encoding.js";
 import { EcdsaTypes, HashAlgorithms, KeyTypes } from "./interfaces.js";
 import { toDER } from "./pem.js";
-import pkg from "elliptic";
-const { ec: EC } = pkg;
+import { p256, p384, p521 } from "@noble/curves/nist.js";
 
 function pkcs1ToSpki(pkcs1Bytes: Uint8Array): Uint8Array {
   const algorithmIdentifier = new Uint8Array([
@@ -179,11 +178,11 @@ export async function verifySignature(
     const namedCurve = (key.algorithm as EcKeyAlgorithm).namedCurve;
     let sig_size = 32;
 
-    if (namedCurve === "P-256") {
+    if (namedCurve === EcdsaTypes.P256) {
       sig_size = 32;
-    } else if (namedCurve === "P-384") {
+    } else if (namedCurve === EcdsaTypes.P384) {
       sig_size = 48;
-    } else if (namedCurve === "P-521") {
+    } else if (namedCurve === EcdsaTypes.P521) {
       sig_size = 66;
     }
 
@@ -257,7 +256,7 @@ export async function verifySignature(
 
 // Verifies an ECDSA signature over a pre-computed digest.
 // WebCrypto's verify() always hashes the input first, so passing a digest would
-// result in double-hashing. We use elliptic.js for low-level ECDSA verification,
+// result in double-hashing. We use @noble/curves for low-level ECDSA verification,
 // adapted from the same workaround used in sigstore-js's conformance CLI.
 // See: https://github.com/sigstore/sigstore-js/blob/main/packages/conformance/src/commands/verify-bundle.ts#L111
 export async function verifySignatureOverDigest(
@@ -270,33 +269,16 @@ export async function verifySignatureOverDigest(
   }
 
   const namedCurve = (key.algorithm as EcKeyAlgorithm).namedCurve;
-  let curveName: string;
-  let sig_size: number;
+  let curve: typeof p256 | typeof p384 | typeof p521;
 
-  if (namedCurve === "P-256") {
-    curveName = "p256";
-    sig_size = 32;
-  } else if (namedCurve === "P-384") {
-    curveName = "p384";
-    sig_size = 48;
-  } else if (namedCurve === "P-521") {
-    curveName = "p521";
-    sig_size = 66;
+  if (namedCurve === EcdsaTypes.P256) {
+    curve = p256;
+  } else if (namedCurve === EcdsaTypes.P384) {
+    curve = p384;
+  } else if (namedCurve === EcdsaTypes.P521) {
+    curve = p521;
   } else {
     throw new Error(`Unsupported curve: ${namedCurve}`);
-  }
-
-  const ec = new EC(curveName);
-
-  // Parse the DER-encoded signature to extract r and s
-  let r: bigint;
-  let s: bigint;
-  try {
-    const asn1_sig = ASN1Obj.parseBuffer(sig);
-    r = asn1_sig.subs[0].toInteger();
-    s = asn1_sig.subs[1].toInteger();
-  } catch {
-    return false;
   }
 
   // Export the public key to get x and y coordinates
@@ -305,23 +287,24 @@ export async function verifySignatureOverDigest(
     throw new Error("Invalid ECDSA public key: missing x or y coordinates");
   }
 
-  // Convert base64url JWK coordinates to hex
-  const x = Uint8ArrayToHex(base64UrlToUint8Array(jwk.x));
-  const y = Uint8ArrayToHex(base64UrlToUint8Array(jwk.y));
+  // Convert base64url JWK coordinates to bytes
+  const x = base64UrlToUint8Array(jwk.x);
+  const y = base64UrlToUint8Array(jwk.y);
 
-  // Create elliptic key from public key coordinates
-  const eckey = ec.keyFromPublic({ x, y }, "hex");
+  // Combine x and y into uncompressed public key format (0x04 || x || y)
+  const publicKey = new Uint8Array(1 + x.length + y.length);
+  publicKey[0] = 0x04;
+  publicKey.set(x, 1);
+  publicKey.set(y, 1 + x.length);
 
-  // Convert digest to hex string for elliptic
-  const digestHex = Uint8ArrayToHex(digest);
-
-  // Verify the signature over the digest
-  const signature = {
-    r: r.toString(16).padStart(sig_size * 2, "0"),
-    s: s.toString(16).padStart(sig_size * 2, "0"),
-  };
-
-  return eckey.verify(digestHex, signature);
+  // Verify the DER-encoded signature over the digest
+  // @noble/curves can parse DER signatures directly with format: 'der'
+  // Options:
+  // - format: 'der' to parse DER-encoded signatures
+  // - prehash: false because we're passing a pre-computed digest, not the original message
+  // - lowS: false to accept both high-S and low-S signatures (matches elliptic.js behavior)
+  //   elliptic.js accepts malleable signatures by default, while @noble/curves rejects them by default
+  return curve.verify(sig, digest, publicKey, { format: 'der', prehash: false, lowS: false });
 }
 
 export { uint8ArrayEqual as bufferEqual } from "./encoding.js";
