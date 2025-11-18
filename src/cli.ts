@@ -26,7 +26,7 @@ type ArtifactInput =
   | { type: "file"; path: string; data: Uint8Array; digestHex: string }
   | { type: "digest"; digestHex: string };
 
-const USAGE = `Usage: sigstore-mini-ts verify-bundle [--staging] --bundle FILE --certificate-identity IDENTITY --certificate-oidc-issuer URL [--trusted-root FILE] FILE_OR_DIGEST`;
+const USAGE = `Usage: sigstore-browser verify-bundle [--staging] --bundle FILE --certificate-identity IDENTITY --certificate-oidc-issuer URL [--trusted-root FILE] FILE_OR_DIGEST`;
 
 function printUsage(): void {
   console.error(USAGE);
