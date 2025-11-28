@@ -26,8 +26,8 @@ limitations under the License.
  * - Uses bufferEqual for Uint8Array comparisons
  */
 
+import { bufferEqual } from "@freedomofpress/crypto-browser";
 import { X509Certificate } from "./cert.js";
-import { bufferEqual } from "../crypto.js";
 
 interface CertificateChainVerifierOptions {
   trustedCerts: X509Certificate[];

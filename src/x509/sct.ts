@@ -13,9 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { verifySignature } from "../crypto.js";
-import { readBigInt64BE, toArrayBuffer } from "../encoding.js";
-import { ByteStream } from "../stream.js";
+import { ByteStream, readBigInt64BE, verifySignature } from "@freedomofpress/crypto-browser";
 
 interface SCTOptions {
   version: number;
@@ -111,7 +109,7 @@ export class SignedCertificateTimestamp {
   // https://www.rfc-editor.org/rfc/rfc6962#section-3.2
   // https://www.rfc-editor.org/rfc/rfc5246#section-7.4.1.4.1
   public static parse(buf: Uint8Array): SignedCertificateTimestamp {
-    const stream = new ByteStream(toArrayBuffer(buf));
+    const stream = new ByteStream(buf);
 
     // Version - enum { v1(0), (255) }
     const version = stream.getUint8();
