@@ -33,7 +33,8 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
-    "@noble/curves": "^2.0.1",
-    "tuf-browser": "^0.1.1"
+    "@freedomofpress/crypto-browser": "^0.1.4",
+    "@freedomofpress/tuf-browser": "^0.1.5",
+    "@noble/curves": "^2.0.1"
   }
 }

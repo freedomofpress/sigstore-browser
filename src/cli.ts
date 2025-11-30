@@ -3,8 +3,13 @@ import { createHash, webcrypto } from "node:crypto";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 
+import {
+  base64ToUint8Array,
+  hexToUint8Array,
+  Uint8ArrayToHex,
+  Uint8ArrayToString,
+} from "@freedomofpress/crypto-browser";
 import { SigstoreBundle } from "./bundle.js";
-import { base64ToUint8Array, hexToUint8Array, Uint8ArrayToHex, Uint8ArrayToString } from "./encoding.js";
 import { TrustedRoot } from "./interfaces.js";
 import { SigstoreVerifier } from "./sigstore.js";
 import { TrustedRootProvider } from "./trust/tuf.js";

@@ -13,9 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { ASN1Obj } from "../asn1/index.js";
-import { toArrayBuffer, Uint8ArrayToString } from "../encoding.js";
-import { ByteStream } from "../stream.js";
+import { ASN1Obj, ByteStream, Uint8ArrayToString } from "@freedomofpress/crypto-browser";
 import { SignedCertificateTimestamp } from "./sct.js";
 
 // https://www.rfc-editor.org/rfc/rfc5280#section-4.1
@@ -187,7 +185,7 @@ export class X509SCTExtension extends X509Extension {
 
   get signedCertificateTimestamps(): SignedCertificateTimestamp[] {
     const buf = this.extnValueObj.subs[0].value;
-    const stream = new ByteStream(toArrayBuffer(buf));
+    const stream = new ByteStream(buf);
 
     // The overall list length is encoded in the first two bytes -- note this
     // is the length of the list in bytes, NOT the number of SCTs in the list

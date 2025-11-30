@@ -13,12 +13,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { ASN1Obj } from "../asn1/index.js";
-import { bufferEqual, importKey, verifySignature } from "../crypto.js";
-import { Uint8ArrayToBase64 } from "../encoding.js";
+import {
+  ASN1Obj,
+  importKey,
+  toDER,
+  Uint8ArrayToBase64,
+  uint8ArrayEqual,
+  verifySignature,
+} from "@freedomofpress/crypto-browser";
 import { KeyTypes } from "../interfaces.js";
 import { ECDSA_CURVE_NAMES, ECDSA_SIGNATURE_ALGOS, RSA_SIGNATURE_ALGOS } from "../oid.js";
-import * as pem from "../pem.js";
 import {
   X509AuthorityKeyIDExtension,
   X509BasicConstraintsExtension,
@@ -50,7 +54,7 @@ export class X509Certificate {
   }
 
   public static parse(cert: Uint8Array | string): X509Certificate {
-    const der = typeof cert === "string" ? pem.toDER(cert) : cert;
+    const der = typeof cert === "string" ? toDER(cert) : cert;
     const asn1 = ASN1Obj.parseBuffer(der);
     return new X509Certificate(asn1);
   }
@@ -112,7 +116,7 @@ export class X509Certificate {
       } else {
         scheme = "SHA256";
       }
-      return importKey("RSA", `RSA_PKCS1V5_${scheme}`, Uint8ArrayToBase64(publicKey));
+      return importKey(KeyTypes.RSA, `RSA_PKCS1V5_${scheme}`, Uint8ArrayToBase64(publicKey));
     } else {
       // ECDSA key - the curve OID is in the second element
       const curveOID = spki.subs[0].subs[1]?.toOID();
@@ -233,7 +237,7 @@ export class X509Certificate {
   }
 
   public equals(other: X509Certificate): boolean {
-    return bufferEqual(this.root.toDER(), other.root.toDER());
+    return uint8ArrayEqual(this.root.toDER(), other.root.toDER());
   }
 
   // Creates a copy of the certificate with a new buffer

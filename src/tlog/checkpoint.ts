@@ -19,8 +19,14 @@ Follows the signed note format specification:
 https://github.com/transparency-dev/formats/blob/main/log/README.md
 */
 
-import { base64ToUint8Array, stringToUint8Array, toArrayBuffer, uint8ArrayEqual, Uint8ArrayToHex } from "../encoding.js";
-import { importKey, verifySignature } from "../crypto.js";
+import {
+  base64ToUint8Array,
+  importKey,
+  KeyTypes,
+  stringToUint8Array,
+  uint8ArrayEqual,
+  verifySignature,
+} from "@freedomofpress/crypto-browser";
 import type { TLogEntry } from "../bundle.js";
 import type { RawLogs } from "../interfaces.js";
 
@@ -223,17 +229,17 @@ async function importTLogKey(tlog: RawLogs[0]): Promise<CryptoKey> {
 
   if (keyDetails === "ecdsa-sha2-nistp256") {
     // SSH-style ECDSA P-256 format used in tests
-    keyType = "ecdsa";
+    keyType = KeyTypes.Ecdsa;
     scheme = "P256-SHA256";
   } else if (keyDetails.includes("ECDSA")) {
-    keyType = "ecdsa";
+    keyType = KeyTypes.Ecdsa;
     // Extract the curve and hash, e.g., "P256_SHA_256" from "PKIX_ECDSA_P256_SHA_256"
     scheme = keyDetails.replace("PKIX_ECDSA_", "").replaceAll("_", "-");
   } else if (keyDetails.includes("ED25519")) {
-    keyType = "ed25519";
-    scheme = "ed25519";
+    keyType = KeyTypes.Ed25519;
+    scheme = KeyTypes.Ed25519;
   } else if (keyDetails.includes("RSA")) {
-    keyType = "rsa";
+    keyType = KeyTypes.RSA;
     // Extract RSA details, e.g., "PSS_SHA_256" from "PKIX_RSA_PSS_SHA_256"
     scheme = keyDetails.replace("PKIX_RSA_", "").replaceAll("_", "-");
   } else {

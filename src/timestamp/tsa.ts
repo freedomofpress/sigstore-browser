@@ -13,11 +13,10 @@
  * - Adds verifyBundleTimestamp for Sigstore bundle integration (new functionality)
  */
 
+import { base64ToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
+import { CertificateChainVerifier, X509Certificate } from "../x509/index.js";
+import { RawTimestampAuthority } from "../interfaces.js";
 import { RFC3161Timestamp } from "../rfc3161/index.js";
-import { X509Certificate, CertificateChainVerifier } from "../x509/index.js";
-import { bufferEqual } from "../crypto.js";
-import { base64ToUint8Array, Uint8ArrayToHex } from "../encoding.js";
-import type { RawTimestampAuthority } from "../interfaces.js";
 
 /**
  * Verifies an RFC3161 timestamp against a set of timestamp authorities
@@ -110,8 +109,8 @@ function filterCAsBySerialAndIssuer(
       base64ToUint8Array(ca.certChain.certificates[0].rawBytes)
     );
 
-    return bufferEqual(leafCert.serialNumber, criteria.serialNumber) &&
-           bufferEqual(leafCert.issuer, criteria.issuer);
+    return uint8ArrayEqual(leafCert.serialNumber, criteria.serialNumber) &&
+           uint8ArrayEqual(leafCert.issuer, criteria.issuer);
   });
 }
 

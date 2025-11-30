@@ -6,9 +6,9 @@ Key differences:
 - Uses Uint8Array instead of Buffer
 - Uses async Web Crypto API (crypto.subtle.digest) instead of sync Node.js crypto
 - Base64 decoding via custom base64ToUint8Array instead of Buffer.from
-- Custom uint8ArrayEqual instead of crypto.bufferEqual
+- uint8ArrayEqual from crypto-browser instead of Node.js crypto.timingSafeEqual
 */
-import { base64ToUint8Array, toArrayBuffer, uint8ArrayEqual } from "../encoding.js";
+import { base64ToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
 import { HashAlgorithms } from "../interfaces.js";
 import type { TLogEntry } from "../bundle.js";
 
@@ -138,7 +138,7 @@ async function hashChildren(
   data.set(left, RFC6962_NODE_HASH_PREFIX.length);
   data.set(right, RFC6962_NODE_HASH_PREFIX.length + left.length);
 
-  const hash = await crypto.subtle.digest(HashAlgorithms.SHA256, toArrayBuffer(data));
+  const hash = await crypto.subtle.digest(HashAlgorithms.SHA256, data as Uint8Array<ArrayBuffer>);
   return new Uint8Array(hash);
 }
 
@@ -147,6 +147,6 @@ async function hashLeaf(leaf: Uint8Array): Promise<Uint8Array> {
   data.set(RFC6962_LEAF_HASH_PREFIX, 0);
   data.set(leaf, RFC6962_LEAF_HASH_PREFIX.length);
 
-  const hash = await crypto.subtle.digest(HashAlgorithms.SHA256, toArrayBuffer(data));
+  const hash = await crypto.subtle.digest(HashAlgorithms.SHA256, data as Uint8Array<ArrayBuffer>);
   return new Uint8Array(hash);
 }
