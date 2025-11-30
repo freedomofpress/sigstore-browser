@@ -244,8 +244,7 @@ export class SigstoreVerifier {
 
   // Adapted from https://github.com/sigstore/sigstore-js/blob/main/packages/verify/src/key/sct.ts
   // Key differences:
-  // - Adds duplicate SCT detection
-  // - Adds SCT timestamp validity checking
+  // - Adds duplicate SCT detection (not in reference)
   // - Inline CT log filtering by logID and validity period (reference uses filterTLogAuthorities)
   // - Returns array of verified SCT logIDs for threshold checking (matches reference behavior)
   async verifySCT(
@@ -312,42 +311,39 @@ export class SigstoreVerifier {
     preCert.appendUint24(tbs.length);
     preCert.appendView(tbs);
 
-    // Collect all verified SCTs to check against threshold
+    // Calculate and return the verification results for each SCT
+    // Unlike sigstore-go which counts verified SCTs and checks threshold at the end,
+    // sigstore-js throws immediately if any SCT fails verification
     const verifiedSCTs: Uint8Array[] = [];
 
     for (const sct of extSCT.signedCertificateTimestamps) {
-      // SCT should be within certificate validity period
-      if (sct.datetime < cert.notBefore || sct.datetime > cert.notAfter) {
-        continue; // Skip invalid SCT timestamp, don't fail yet
-      }
-
       // Find the CT log that matches this SCT's log ID and is valid for the SCT datetime
       const validCTLogs = ctlogs.filter((log) => {
         // Check if log IDs match
-        if (log.logID.length !== sct.logID.length) return false;
-        for (let i = 0; i < log.logID.length; i++) {
-          if (log.logID[i] !== sct.logID[i]) return false;
-        }
+        if (!uint8ArrayEqual(log.logID, sct.logID)) return false;
         // Check that the SCT datetime is within the log's validity period
         return log.validFor.start <= sct.datetime && sct.datetime <= log.validFor.end;
       });
 
-      // Try to verify with any valid CT log
-      let verified = false;
-      for (const log of validCTLogs) {
-        try {
-          if (await sct.verify(preCert.buffer, log.publicKey)) {
-            verified = true;
-            break; // Found a valid log for this SCT
+      // See if the SCT is valid for any of the CT logs
+      const verified = await (async () => {
+        for (const log of validCTLogs) {
+          try {
+            if (await sct.verify(preCert.buffer, log.publicKey)) {
+              return true;
+            }
+          } catch {
+            // Continue trying other logs
           }
-        } catch (e) {
-          // Continue trying other logs
         }
+        return false;
+      })();
+
+      if (!verified) {
+        throw new Error("SCT verification failed");
       }
 
-      if (verified) {
-        verifiedSCTs.push(sct.logID);
-      }
+      verifiedSCTs.push(sct.logID);
     }
 
     return verifiedSCTs;
@@ -360,9 +356,10 @@ export class SigstoreVerifier {
   ): Promise<boolean> {
     const entries = bundle.verificationMaterial.tlogEntries;
 
-    if (entries.length < 1) {
+    // Check that bundle has enough tlog entries to meet threshold
+    if (entries.length < this.options.tlogThreshold) {
       throw new Error(
-        "Failed to find a transparency log entry in the provided bundle.",
+        `Not enough tlog entries: ${entries.length} < ${this.options.tlogThreshold}`,
       );
     }
 
@@ -629,12 +626,9 @@ export class SigstoreVerifier {
     // # 5 Rekor inclusion proof (Merkle tree verification)
     await this.verifyInclusionProof(bundle);
 
-    // # 5.1 Rekor body verification
-    if (bundle.verificationMaterial.tlogEntries.length > 0) {
-      await verifyTLogBody(
-        bundle.verificationMaterial.tlogEntries[0],
-        bundle
-      );
+    // # 5.1 Rekor body verification - verify ALL entries (matches sigstore-js verifier.ts:147)
+    for (const entry of bundle.verificationMaterial.tlogEntries) {
+      await verifyTLogBody(entry, bundle);
     }
 
     // # 6 TSA Timestamp Verification (if present)
