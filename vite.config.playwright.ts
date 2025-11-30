@@ -2,25 +2,13 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  build: {
-    minify: false,
-    outDir: "dist",
-    target: "esnext",
-    lib: {
-      entry: "src/index.ts",
-      formats: ["es"],
-      fileName: "index",
-    },
-  },
   test: {
-    globals: true,
+    include: ["**/*.browser.test.ts"],
     browser: {
-      provider: "playwright",
       enabled: true,
-      headless: false,
-      instances: [
-        { browser: "chromium" },
-      ],
+      provider: "playwright",
+      headless: true,
+      instances: [{ browser: "chromium" }],
     },
   },
 });
