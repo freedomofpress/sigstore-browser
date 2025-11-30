@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { SigstoreVerifier } from "./sigstore.js";
+import { X509Certificate } from "./x509/cert.js";
 
 describe("Sigstore Browser Integration Tests", () => {
   it("should initialize SigstoreVerifier in browser", () => {
@@ -146,6 +147,42 @@ describe("Sigstore Browser Integration Tests", () => {
       data
     );
 
+    expect(valid).toBe(true);
+  });
+
+  it("should verify RSA-PSS signed X.509 certificate", async () => {
+    // Self-signed certificate with standard RSA key but RSA-PSS signature (SHA-256, salt=32)
+    // WebCrypto requires rsaEncryption OID for the public key, not id-RSASSA-PSS
+    const rsaPssCertPem = `-----BEGIN CERTIFICATE-----
+MIIDhTCCAjmgAwIBAgIUYzfguLRx71Cbn2Ty7xCt3GH+N6AwQQYJKoZIhvcNAQEK
+MDSgDzANBglghkgBZQMEAgEFAKEcMBoGCSqGSIb3DQEBCDANBglghkgBZQMEAgEF
+AKIDAgEgMB4xHDAaBgNVBAMME1Rlc3QgUlNBLVBTUyBTaWduZWQwHhcNMjUxMTMw
+MDMwMDU2WhcNMjYxMTMwMDMwMDU2WjAeMRwwGgYDVQQDDBNUZXN0IFJTQS1QU1Mg
+U2lnbmVkMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA29B/88QFBILg
+YCWp1pF3xBj7FVhBUCv6JwyZAouYWUxgGmpFg6RLgbaWk59oDtEFQ5xRGSDXLuMW
+GL5wZVCjSnmYcBsBDROO+HfLKwDRcHw09bJY979PDHPy5EPZale/JsdxE+fepUw1
+XQDvlK5Dyp6WKl9UBjTtl6+LHKV/KTo+SiaQP2vsbZvTIt3s8MHybV/ixYXlSPQt
+Kju50REAaqSSYqxNzsq8Z2sjJbFBcatt5C1JhfoSyIHz5D0slriv8835DYhk0u4n
+bvNzXhWeF7htHTiPWCYwaTr5cgjyhEWg3SNP+Tu9dxCYVXm7/jWTHRdPqUPQqFsq
+wXqsrzSP+wIDAQABo1MwUTAdBgNVHQ4EFgQU+UcBxKusOtY4lSjqyFuxQfN5zdIw
+HwYDVR0jBBgwFoAU+UcBxKusOtY4lSjqyFuxQfN5zdIwDwYDVR0TAQH/BAUwAwEB
+/zBBBgkqhkiG9w0BAQowNKAPMA0GCWCGSAFlAwQCAQUAoRwwGgYJKoZIhvcNAQEI
+MA0GCWCGSAFlAwQCAQUAogMCASADggEBAFIn3VpfydVvpI82NwfeGxWlhZhgD2dX
+gJUhj6pcXqwnlCzpyRI4e3uNO1h9nr9UrogI0AV2IDhVdUYxz3F2/680JtxXpB1x
+J02BSAYllvXgf9efc20lFzbPDzvMzKnwx3S3proewbJ4uVPHzvKubWsx8MwEuI0X
+8xkI1qMIXgevTCt+LGhp+0C/u8WsW3or5ZI7GnZNowPJEAtZnfO+VORB7FvbzEGr
+ewS+2T7Qz4oXaQMidPOjr1Q8WKqaKO4yCtC8cz4qVWi3lNqAcAGtonQMXUiflEWV
+9kqKQx+LJYJqxKkBtDRnRLnVNn4+inotrgnV126LsCe3uLaGwJIFy1U=
+-----END CERTIFICATE-----`;
+
+    const cert = X509Certificate.parse(rsaPssCertPem);
+
+    // Verify it's an RSA-PSS certificate
+    expect(cert.signatureAlgorithmOid).toBe("1.2.840.113549.1.1.10");
+    expect(cert.signatureAlgorithm).toBe("sha256");
+
+    // Verify the self-signed certificate (signature verification)
+    const valid = await cert.verify();
     expect(valid).toBe(true);
   });
 

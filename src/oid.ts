@@ -7,7 +7,7 @@ export const ECDSA_SIGNATURE_ALGOS: Record<string, string> = {
   "1.2.840.10045.4.3.4": "sha512",
 };
 
-// RSA signature algorithms
+// RSA signature algorithms (PKCS#1 v1.5)
 export const RSA_SIGNATURE_ALGOS: Record<string, string> = {
   "1.2.840.113549.1.1.11": "sha256", // sha256WithRSAEncryption
   "1.2.840.113549.1.1.12": "sha384", // sha384WithRSAEncryption
@@ -15,11 +15,17 @@ export const RSA_SIGNATURE_ALGOS: Record<string, string> = {
   "1.2.840.113549.1.1.5": "sha1",    // sha1WithRSAEncryption
 };
 
+// RSASSA-PSS OID - hash algorithm must be parsed from signature algorithm parameters
+export const OID_RSASSA_PSS = "1.2.840.113549.1.1.10";
+
 export const SHA2_HASH_ALGOS: Record<string, string> = {
   "2.16.840.1.101.3.4.2.1": "sha256",
   "2.16.840.1.101.3.4.2.2": "sha384",
   "2.16.840.1.101.3.4.2.3": "sha512",
 };
+
+// Default hash algorithm used when not specified
+export const DEFAULT_HASH_ALGORITHM = "sha256";
 
 export const ECDSA_CURVE_NAMES: Record<string, string> = {
   "1.2.840.10045.3.1.7": "secp256r1",
