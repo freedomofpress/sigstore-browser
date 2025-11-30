@@ -11,7 +11,7 @@
  * - Adds verifyDSSE002Body() - new functionality (reference only supports v0.0.1)
  */
 
-import { base64ToUint8Array, hexToUint8Array, toArrayBuffer, uint8ArrayEqual } from "../encoding.js";
+import { base64ToUint8Array, hexToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
 import { HashAlgorithms } from "../interfaces.js";
 import type { SigstoreBundle } from "../bundle.js";
 import type { RekorEntry } from "./body.js";
@@ -90,7 +90,7 @@ async function verifyDSSE001Body(
 
   const payloadBytes = base64ToUint8Array(bundle.dsseEnvelope.payload);
   const bundleHashBytes = new Uint8Array(
-    await crypto.subtle.digest(HashAlgorithms.SHA256, toArrayBuffer(payloadBytes))
+    await crypto.subtle.digest(HashAlgorithms.SHA256, payloadBytes as Uint8Array<ArrayBuffer>)
   );
 
   if (!uint8ArrayEqual(tlogHashBytes, bundleHashBytes)) {
@@ -138,7 +138,7 @@ async function verifyDSSE002Body(
 
   const payloadBytes = base64ToUint8Array(bundle.dsseEnvelope.payload);
   const bundleHashBytes = new Uint8Array(
-    await crypto.subtle.digest(HashAlgorithms.SHA256, toArrayBuffer(payloadBytes))
+    await crypto.subtle.digest(HashAlgorithms.SHA256, payloadBytes as Uint8Array<ArrayBuffer>)
   );
 
   if (!uint8ArrayEqual(tlogHashBytes, bundleHashBytes)) {

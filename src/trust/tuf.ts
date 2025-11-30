@@ -7,9 +7,9 @@
  * Reference: https://github.com/freedomofpress/tuf-browser
  */
 
-import type { TrustedRoot } from "../interfaces.js";
-import { Uint8ArrayToString } from "../encoding.js";
-import type { TUFClient } from "tuf-browser/dist/tuf.js";
+import { Uint8ArrayToString } from "@freedomofpress/crypto-browser";
+import type { TUFClient } from "@freedomofpress/tuf-browser";
+import { TrustedRoot } from "../interfaces.js";
 
 /**
  * Options for TrustedRootProvider configuration
@@ -106,7 +106,7 @@ export class TrustedRootProvider {
     }
 
     try {
-      const { TUFClient } = await import('tuf-browser/dist/tuf.js');
+      const { TUFClient } = await import('@freedomofpress/tuf-browser');
 
       // Get initial root metadata
       const rootMetadata = this.initialRoot || await this.getDefaultRoot();
@@ -179,10 +179,10 @@ export class TrustedRootProvider {
 
       // Fetch the trusted root target via TUF
       // TUF will handle all verification (signatures, rollback protection, etc.)
-      const trustedRootBytes = await this.tufClient.getTarget(this.trustedRootTarget);
+      const trustedRootBuffer = await this.tufClient.getTarget(this.trustedRootTarget);
 
       // Parse the trusted root JSON
-      const trustedRootJson = Uint8ArrayToString(trustedRootBytes);
+      const trustedRootJson = Uint8ArrayToString(new Uint8Array(trustedRootBuffer));
       const trustedRoot = JSON.parse(trustedRootJson) as TrustedRoot;
 
       // Cache the result

@@ -13,9 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { ASN1Obj } from "../asn1/index.js";
-import { bufferEqual } from "../crypto.js";
-import { toArrayBuffer } from "../encoding.js";
+import { ASN1Obj, bufferEqual } from "@freedomofpress/crypto-browser";
 import { HashAlgorithms } from "../interfaces.js";
 import { SHA2_HASH_ALGOS } from "../oid.js";
 import { RFC3161TimestampVerificationError } from "./error.js";
@@ -62,7 +60,7 @@ export class TSTInfo {
 
     const digest = await crypto.subtle.digest(
       hashAlgName,
-      toArrayBuffer(data),
+      data as Uint8Array<ArrayBuffer>,
     );
     if (
       !bufferEqual(new Uint8Array(digest), this.messageImprintHashedMessage)

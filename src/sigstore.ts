@@ -1,19 +1,27 @@
-import { SigstoreBundle } from "./bundle.js";
-import { canonicalize } from "./canonicalize.js";
-import { importKey, verifySignature, verifySignatureOverDigest } from "./crypto.js";
-import { preAuthEncoding } from "./dsse.js";
 import {
   base64ToUint8Array,
+  ByteStream,
+  canonicalize,
+  importKey,
   stringToUint8Array,
-  toArrayBuffer,
   uint8ArrayEqual,
   Uint8ArrayToHex,
   Uint8ArrayToString,
-} from "./encoding.js";
+  verifySignature,
+  verifySignatureOverDigest,
+} from "@freedomofpress/crypto-browser";
+import { HashAlgorithms } from "./interfaces.js";
+import {
+  CertificateChainVerifier,
+  EXTENSION_OID_SCT,
+  X509Certificate,
+  X509SCTExtension,
+} from "./x509/index.js";
+import { SigstoreBundle } from "./bundle.js";
+import { preAuthEncoding } from "./dsse.js";
 import {
   CertAuthority,
   CTLog,
-  HashAlgorithms,
   RawCAs,
   RawLogs,
   RawTimestampAuthorities,
@@ -22,13 +30,6 @@ import {
   SigstoreRoots,
   TrustedRoot,
 } from "./interfaces.js";
-import { ByteStream } from "./stream.js";
-import {
-  CertificateChainVerifier,
-  EXTENSION_OID_SCT,
-  X509Certificate,
-  X509SCTExtension,
-} from "./x509/index.js";
 import { verifyMerkleInclusion } from "./tlog/merkle.js";
 import { verifyCheckpoint } from "./tlog/checkpoint.js";
 import { verifyTLogBody } from "./tlog/body.js";
@@ -302,7 +303,7 @@ export class SigstoreVerifier {
 
     // Calculate hash of the issuer's public key
     const issuerId = new Uint8Array(
-      await crypto.subtle.digest(HashAlgorithms.SHA256, toArrayBuffer(issuer.publicKey)),
+      await crypto.subtle.digest(HashAlgorithms.SHA256, issuer.publicKey as Uint8Array<ArrayBuffer>),
     );
     preCert.appendView(issuerId);
 
@@ -675,7 +676,7 @@ export class SigstoreVerifier {
       } else {
         // data is the file content, compute the digest
         artifactDigest = Uint8ArrayToHex(
-          new Uint8Array(await crypto.subtle.digest(HashAlgorithms.SHA256, toArrayBuffer(data)))
+          new Uint8Array(await crypto.subtle.digest(HashAlgorithms.SHA256, data as Uint8Array<ArrayBuffer>))
         );
       }
 

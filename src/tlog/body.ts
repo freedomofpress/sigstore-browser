@@ -9,7 +9,7 @@
  * - Direct bundle comparison instead of SignatureContent abstraction
  */
 
-import { base64Decode } from "../encoding.js";
+import { base64Decode } from "@freedomofpress/crypto-browser";
 import type { SigstoreBundle, TLogEntry } from "../bundle.js";
 import { verifyHashedRekordBody } from "./hashedrekord.js";
 import { verifyDSSEBody } from "./dsse.js";

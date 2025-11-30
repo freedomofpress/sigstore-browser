@@ -13,9 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { ASN1Obj } from "../asn1/index.js";
-import { bufferEqual, verifySignature } from "../crypto.js";
-import { toArrayBuffer } from "../encoding.js";
+import { ASN1Obj, bufferEqual, verifySignature } from "@freedomofpress/crypto-browser";
 import { HashAlgorithms } from "../interfaces.js";
 import { ECDSA_SIGNATURE_ALGOS, RSA_SIGNATURE_ALGOS, SHA2_HASH_ALGOS } from "../oid.js";
 import { RFC3161TimestampVerificationError } from "./error.js";
@@ -123,7 +121,7 @@ export class RFC3161Timestamp {
 
     const tstInfoDigest = await crypto.subtle.digest(
       hashAlgName,
-      toArrayBuffer(this.tstInfo.raw),
+      this.tstInfo.raw as Uint8Array<ArrayBuffer>,
     );
     const expectedDigest = this.messageDigestAttributeObj.subs[1].subs[0].value;
 

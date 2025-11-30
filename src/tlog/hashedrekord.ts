@@ -10,7 +10,7 @@
  * - Adds verifyHashedRekordV002Body() - new functionality (reference only supports v0.0.1)
  */
 
-import { base64ToUint8Array, hexToUint8Array, uint8ArrayEqual } from "../encoding.js";
+import { base64ToUint8Array, hexToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
 import type { SigstoreBundle } from "../bundle.js";
 import type { RekorEntry } from "./body.js";
 
