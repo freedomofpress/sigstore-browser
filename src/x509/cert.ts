@@ -22,7 +22,7 @@ import {
   verifySignature,
 } from "@freedomofpress/crypto-browser";
 import { KeyTypes } from "../interfaces.js";
-import { ECDSA_CURVE_NAMES, ECDSA_SIGNATURE_ALGOS, RSA_SIGNATURE_ALGOS } from "../oid.js";
+import { DEFAULT_HASH_ALGORITHM, ECDSA_CURVE_NAMES, ECDSA_SIGNATURE_ALGOS, OID_RSASSA_PSS, RSA_SIGNATURE_ALGOS, SHA2_HASH_ALGOS } from "../oid.js";
 import {
   X509AuthorityKeyIDExtension,
   X509BasicConstraintsExtension,
@@ -96,27 +96,33 @@ export class X509Certificate {
   }
 
   /**
-   * Import the public key with a specific hash algorithm for RSA keys
-   * For ECDSA keys, the hash parameter is ignored
+   * Import the public key with a specific hash algorithm and signature scheme for RSA keys.
+   * For ECDSA keys, both parameters are ignored.
+   * @param hashAlg - Hash algorithm (e.g., "sha384") for RSA keys
+   * @param usePss - If true, import as RSA-PSS key; if false, import as PKCS#1 v1.5
    */
-  public async getPublicKeyObj(hashAlg?: string): Promise<CryptoKey> {
+  public async getPublicKeyObj(hashAlg?: string, usePss?: boolean): Promise<CryptoKey> {
     const publicKey = this.subjectPublicKeyInfoObj.toDER();
     const spki = ASN1Obj.parseBuffer(publicKey);
     const algorithmOID = spki.subs[0].subs[0].toOID();
 
-    // Check if it's an RSA key (OID 1.2.840.113549.1.1.1)
-    if (algorithmOID === "1.2.840.113549.1.1.1") {
-      // RSA key - use provided hash or default to SHA-256
-      const hash = hashAlg || "sha256";
-      let scheme: string;
-      if (hash.includes("384")) {
-        scheme = "SHA384";
-      } else if (hash.includes("512")) {
-        scheme = "SHA512";
-      } else {
-        scheme = "SHA256";
-      }
-      return importKey(KeyTypes.RSA, `RSA_PKCS1V5_${scheme}`, Uint8ArrayToBase64(publicKey));
+    // RSA key (OID 1.2.840.113549.1.1.1) or RSA-PSS key (OID 1.2.840.113549.1.1.10)
+    const isRsaKey = algorithmOID === "1.2.840.113549.1.1.1";
+    const isRsaPssKey = algorithmOID === OID_RSASSA_PSS;
+
+    if (isRsaPssKey) {
+      // WebCrypto doesn't support importing keys with id-RSASSA-PSS OID, only rsaEncryption
+      throw new Error(
+        "RSA-PSS public keys (id-RSASSA-PSS OID) are not supported by WebCrypto. " +
+        "Only certificates with standard RSA keys (rsaEncryption OID) signed using RSA-PSS are supported."
+      );
+    }
+
+    if (isRsaKey) {
+      const hash = hashAlg || DEFAULT_HASH_ALGORITHM;
+      // crypto-browser extracts hash from scheme and uses PSS unless "PKCS1" is present
+      const scheme = usePss ? hash : `PKCS1_${hash}`;
+      return importKey(KeyTypes.RSA, scheme, Uint8ArrayToBase64(publicKey));
     } else {
       // ECDSA key - the curve OID is in the second element
       const curveOID = spki.subs[0].subs[1]?.toOID();
@@ -134,7 +140,41 @@ export class X509Certificate {
 
   get signatureAlgorithm(): string {
     const oid: string = this.signatureAlgorithmObj.subs[0].toOID();
-    return ECDSA_SIGNATURE_ALGOS[oid];
+    return ECDSA_SIGNATURE_ALGOS[oid] || RSA_SIGNATURE_ALGOS[oid] || this.parseRsaPssHashAlgorithm();
+  }
+
+  get signatureAlgorithmOid(): string {
+    return this.signatureAlgorithmObj.subs[0].toOID();
+  }
+
+  /**
+   * Parse hash algorithm from RSA-PSS signature algorithm parameters.
+   * RSA-PSS parameters are: SEQUENCE { hashAlgorithm, maskGenAlgorithm, saltLength, trailerField }
+   */
+  private parseRsaPssHashAlgorithm(): string {
+    const sigAlgOid = this.signatureAlgorithmObj.subs[0].toOID();
+    if (sigAlgOid !== OID_RSASSA_PSS) {
+      return "";
+    }
+
+    // RSA-PSS has parameters in the second element of the signature algorithm sequence
+    const params = this.signatureAlgorithmObj.subs[1];
+    if (!params || params.subs.length === 0) {
+      return DEFAULT_HASH_ALGORITHM;
+    }
+
+    // First element is hashAlgorithm [0] EXPLICIT
+    const hashAlgWrapper = params.subs[0];
+    if (hashAlgWrapper && hashAlgWrapper.subs.length > 0) {
+      // The wrapper contains a SEQUENCE with the hash algorithm OID
+      const hashAlgSeq = hashAlgWrapper.subs[0];
+      if (hashAlgSeq && hashAlgSeq.subs.length > 0) {
+        const hashOid = hashAlgSeq.subs[0].toOID();
+        return SHA2_HASH_ALGOS[hashOid] || DEFAULT_HASH_ALGORITHM;
+      }
+    }
+
+    return DEFAULT_HASH_ALGORITHM;
   }
 
   get signatureValue(): Uint8Array {
@@ -214,15 +254,19 @@ export class X509Certificate {
 
   public async verify(issuerCertificate?: X509Certificate): Promise<boolean> {
     // Extract the hash algorithm from this certificate's signature algorithm
-    // (not the issuer's own signature algorithm)
-    const sigAlgOID = this.signatureAlgorithmObj.subs[0].toOID();
-    const hashAlg = RSA_SIGNATURE_ALGOS[sigAlgOID] || ECDSA_SIGNATURE_ALGOS[sigAlgOID];
+    const sigAlgOID = this.signatureAlgorithmOid;
+    const isRsaPss = sigAlgOID === OID_RSASSA_PSS;
+
+    // Get hash algorithm - for RSA-PSS, parse from parameters; otherwise lookup in tables
+    const hashAlg = isRsaPss
+      ? this.parseRsaPssHashAlgorithm()
+      : (RSA_SIGNATURE_ALGOS[sigAlgOID] || ECDSA_SIGNATURE_ALGOS[sigAlgOID]);
 
     // Use the issuer's public key if provided, otherwise use the subject's (for self-signed certs)
-    // Import with the correct hash algorithm for this certificate's signature
+    // Import with the correct hash algorithm and key type for this certificate's signature
     const publicKeyObj = issuerCertificate
-      ? await issuerCertificate.getPublicKeyObj(hashAlg)
-      : await this.getPublicKeyObj(hashAlg);
+      ? await issuerCertificate.getPublicKeyObj(hashAlg, isRsaPss)
+      : await this.getPublicKeyObj(hashAlg, isRsaPss);
 
     return await verifySignature(
       publicKeyObj,
