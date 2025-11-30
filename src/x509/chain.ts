@@ -23,10 +23,10 @@ limitations under the License.
  * Key differences from sigstore-js:
  * - Browser-compatible: async verify() method for Web Crypto API
  * - Uses Uint8Array instead of Buffer for binary data
- * - Uses bufferEqual for Uint8Array comparisons
+ * - Uses uint8ArrayEqual for Uint8Array comparisons
  */
 
-import { bufferEqual } from "@freedomofpress/crypto-browser";
+import { uint8ArrayEqual } from "@freedomofpress/crypto-browser";
 import { X509Certificate } from "./cert.js";
 
 interface CertificateChainVerifierOptions {
@@ -123,7 +123,7 @@ export class CertificateChainVerifier {
     let issuers: X509Certificate[] = [];
     let keyIdentifier: Uint8Array | undefined;
 
-    if (bufferEqual(certificate.subject, certificate.issuer)) {
+    if (uint8ArrayEqual(certificate.subject, certificate.issuer)) {
       if (await certificate.verify()) {
         return [certificate];
       }
@@ -137,7 +137,7 @@ export class CertificateChainVerifier {
       if (keyIdentifier) {
         if (possibleIssuer.extSubjectKeyID) {
           if (
-            bufferEqual(
+            uint8ArrayEqual(
               possibleIssuer.extSubjectKeyID.keyIdentifier,
               keyIdentifier
             )
@@ -148,7 +148,7 @@ export class CertificateChainVerifier {
         }
       }
 
-      if (bufferEqual(possibleIssuer.subject, certificate.issuer)) {
+      if (uint8ArrayEqual(possibleIssuer.subject, certificate.issuer)) {
         issuers.push(possibleIssuer);
       }
     });
@@ -180,7 +180,7 @@ export class CertificateChainVerifier {
     }
 
     for (let i = path.length - 2; i >= 0; i--) {
-      if (!bufferEqual(path[i].issuer, path[i + 1].subject)) {
+      if (!uint8ArrayEqual(path[i].issuer, path[i + 1].subject)) {
         throw new Error("incorrect certificate name chaining");
       }
     }

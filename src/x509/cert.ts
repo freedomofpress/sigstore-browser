@@ -15,10 +15,10 @@ limitations under the License.
 */
 import {
   ASN1Obj,
-  bufferEqual,
   importKey,
   toDER,
   Uint8ArrayToBase64,
+  uint8ArrayEqual,
   verifySignature,
 } from "@freedomofpress/crypto-browser";
 import { KeyTypes } from "../interfaces.js";
@@ -237,7 +237,7 @@ export class X509Certificate {
   }
 
   public equals(other: X509Certificate): boolean {
-    return bufferEqual(this.root.toDER(), other.root.toDER());
+    return uint8ArrayEqual(this.root.toDER(), other.root.toDER());
   }
 
   // Creates a copy of the certificate with a new buffer

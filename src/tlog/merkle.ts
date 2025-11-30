@@ -6,7 +6,7 @@ Key differences:
 - Uses Uint8Array instead of Buffer
 - Uses async Web Crypto API (crypto.subtle.digest) instead of sync Node.js crypto
 - Base64 decoding via custom base64ToUint8Array instead of Buffer.from
-- Custom uint8ArrayEqual instead of crypto.bufferEqual
+- uint8ArrayEqual from crypto-browser instead of Node.js crypto.timingSafeEqual
 */
 import { base64ToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
 import { HashAlgorithms } from "../interfaces.js";

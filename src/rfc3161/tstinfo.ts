@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { ASN1Obj, bufferEqual } from "@freedomofpress/crypto-browser";
+import { ASN1Obj, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
 import { HashAlgorithms } from "../interfaces.js";
 import { SHA2_HASH_ALGOS } from "../oid.js";
 import { RFC3161TimestampVerificationError } from "./error.js";
@@ -63,7 +63,7 @@ export class TSTInfo {
       data as Uint8Array<ArrayBuffer>,
     );
     if (
-      !bufferEqual(new Uint8Array(digest), this.messageImprintHashedMessage)
+      !uint8ArrayEqual(new Uint8Array(digest), this.messageImprintHashedMessage)
     ) {
       throw new RFC3161TimestampVerificationError(
         "message imprint does not match artifact",
