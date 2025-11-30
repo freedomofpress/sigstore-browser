@@ -12,3 +12,6 @@ export {
 } from "./errors.js";
 export { verifyRFC3161Timestamp, verifyBundleTimestamp } from "./timestamp/tsa.js";
 export { TrustedRootProvider, type TrustedRootProviderOptions } from "./trust/tuf.js";
+export { X509Certificate, EXTENSION_OID_SCT } from "./x509/cert.js";
+export { X509Extension } from "./x509/ext.js";
+export { CertificateChainVerifier } from "./x509/chain.js";
