@@ -356,9 +356,10 @@ export class SigstoreVerifier {
   ): Promise<boolean> {
     const entries = bundle.verificationMaterial.tlogEntries;
 
-    if (entries.length < 1) {
+    // Check that bundle has enough tlog entries to meet threshold
+    if (entries.length < this.options.tlogThreshold) {
       throw new Error(
-        "Failed to find a transparency log entry in the provided bundle.",
+        `Not enough tlog entries: ${entries.length} < ${this.options.tlogThreshold}`,
       );
     }
 
@@ -625,12 +626,9 @@ export class SigstoreVerifier {
     // # 5 Rekor inclusion proof (Merkle tree verification)
     await this.verifyInclusionProof(bundle);
 
-    // # 5.1 Rekor body verification
-    if (bundle.verificationMaterial.tlogEntries.length > 0) {
-      await verifyTLogBody(
-        bundle.verificationMaterial.tlogEntries[0],
-        bundle
-      );
+    // # 5.1 Rekor body verification - verify ALL entries (matches sigstore-js verifier.ts:147)
+    for (const entry of bundle.verificationMaterial.tlogEntries) {
+      await verifyTLogBody(entry, bundle);
     }
 
     // # 6 TSA Timestamp Verification (if present)
