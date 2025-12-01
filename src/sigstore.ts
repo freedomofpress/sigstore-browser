@@ -534,15 +534,17 @@ export class SigstoreVerifier {
       throw new Error("No transparency log entries found in bundle");
     }
 
-    const entry = bundle.verificationMaterial.tlogEntries[0];
+    // Verify inclusion proof for ALL entries, not just the first one
+    // Reference: https://github.com/sigstore/sigstore-go/blob/main/pkg/verify/tlog.go#L74-L127
+    for (const entry of bundle.verificationMaterial.tlogEntries) {
+      // Only verify if there's an inclusion proof (v0.3/rekor2 bundles)
+      // v0.1 bundles use inclusion promises instead, verified in verifyInclusionPromise
+      if (entry.inclusionProof) {
+        await verifyMerkleInclusion(entry);
 
-    // Only verify if there's an inclusion proof (v0.3/rekor2 bundles)
-    // v0.1 bundles use inclusion promises instead, verified in verifyInclusionPromise
-    if (entry.inclusionProof) {
-      await verifyMerkleInclusion(entry);
-
-      if (entry.inclusionProof.checkpoint) {
-        await verifyCheckpoint(entry, this.rawRoot.tlogs);
+        if (entry.inclusionProof.checkpoint) {
+          await verifyCheckpoint(entry, this.rawRoot.tlogs);
+        }
       }
     }
   }
