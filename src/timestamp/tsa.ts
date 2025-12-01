@@ -152,22 +152,24 @@ async function verifyTimestampForCA(
 }
 
 /**
- * Extracts the verified timestamp from a bundle's timestamp verification data
+ * Verifies all timestamps in a bundle's timestamp verification data
  *
- * New functionality for Sigstore bundle integration (not in sigstore-js reference)
+ * Matches sigstore-js behavior: all timestamps must successfully verify.
+ * Reference: https://github.com/sigstore/sigstore-js/blob/main/packages/verify/src/verifier.ts#L64-L108
  *
  * @param timestampData - The timestamp verification data from the bundle
  * @param signature - The signature being verified
  * @param timestampAuthorities - List of trusted timestamp authorities
- * @returns The verified signing time, or undefined if no timestamp
+ * @returns Array of verified signing times (empty if no timestamps present)
+ * @throws Error if any timestamp fails verification or duplicates are found
  */
 export async function verifyBundleTimestamp(
   timestampData: any,
   signature: Uint8Array,
   timestampAuthorities: RawTimestampAuthority[]
-): Promise<Date | undefined> {
+): Promise<Date[]> {
   if (!timestampData?.rfc3161Timestamps?.length) {
-    return undefined;
+    return [];
   }
 
   // Check for duplicate timestamps
@@ -179,26 +181,20 @@ export async function verifyBundleTimestamp(
     seenTimestamps.add(tsData.signedTimestamp);
   }
 
-  // Process each RFC3161 timestamp
-  const errors: string[] = [];
+  // Verify ALL timestamps - each must succeed (matches sigstore-js behavior)
+  const verifiedTimestamps: Date[] = [];
   for (const tsData of timestampData.rfc3161Timestamps) {
-    try {
-      // Decode the base64-encoded timestamp
-      const timestampBytes = base64ToUint8Array(tsData.signedTimestamp);
-      const timestamp = RFC3161Timestamp.parse(timestampBytes);
+    // Decode the base64-encoded timestamp
+    const timestampBytes = base64ToUint8Array(tsData.signedTimestamp);
+    const timestamp = RFC3161Timestamp.parse(timestampBytes);
 
-      const signingTime = await verifyRFC3161Timestamp(
-        timestamp,
-        signature,
-        timestampAuthorities
-      );
-      return signingTime;
-    } catch (e) {
-      // Continue to next timestamp if this one fails
-      errors.push(e instanceof Error ? e.message : String(e));
-      continue;
-    }
+    const signingTime = await verifyRFC3161Timestamp(
+      timestamp,
+      signature,
+      timestampAuthorities
+    );
+    verifiedTimestamps.push(signingTime);
   }
 
-  throw new Error(`No valid RFC3161 timestamps found. Errors: ${errors.join(', ')}`);
+  return verifiedTimestamps;
 }

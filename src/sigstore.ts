@@ -631,18 +631,24 @@ export class SigstoreVerifier {
       await verifyTLogBody(entry, bundle);
     }
 
-    // # 6 TSA Timestamp Verification (if present)
-    let verifiedTimestamp: Date | undefined;
-    if (bundle.verificationMaterial.timestampVerificationData) {
-      // Verify TSA timestamps if present
-      verifiedTimestamp = await verifyBundleTimestamp(
-        bundle.verificationMaterial.timestampVerificationData,
-        signature,
-        this.rawRoot?.timestampAuthorities || []
-      );
+    // # 6 TSA Timestamp Verification
+    // Verify all timestamps and enforce threshold
+    // Reference: https://github.com/sigstore/sigstore-js/blob/main/packages/verify/src/verifier.ts#L101-L106
+    const verifiedTimestamps = await verifyBundleTimestamp(
+      bundle.verificationMaterial.timestampVerificationData,
+      signature,
+      this.rawRoot?.timestampAuthorities || []
+    );
 
-      // If we have a verified timestamp, check certificate validity at that time
-      if (verifiedTimestamp && !signingCert.validForDate(verifiedTimestamp)) {
+    if (verifiedTimestamps.length < this.options.tsaThreshold) {
+      throw new Error(
+        `Not enough verified TSA timestamps: ${verifiedTimestamps.length} < ${this.options.tsaThreshold}`
+      );
+    }
+
+    // If we have verified timestamps, check certificate validity at each timestamp time
+    for (const verifiedTimestamp of verifiedTimestamps) {
+      if (!signingCert.validForDate(verifiedTimestamp)) {
         throw new Error(
           "Certificate was not valid at the time of timestamping"
         );
