@@ -172,17 +172,11 @@ export async function verifyBundleTimestamp(
     return [];
   }
 
-  // Check for duplicate timestamps
-  const seenTimestamps = new Set<string>();
-  for (const tsData of timestampData.rfc3161Timestamps) {
-    if (seenTimestamps.has(tsData.signedTimestamp)) {
-      throw new Error("Duplicate TSA timestamp detected");
-    }
-    seenTimestamps.add(tsData.signedTimestamp);
-  }
-
   // Verify ALL timestamps - each must succeed (matches sigstore-js behavior)
-  const verifiedTimestamps: Date[] = [];
+  // Collect verification results for duplicate checking after verification
+  // Reference: https://github.com/sigstore/sigstore-js/blob/main/packages/verify/src/verifier.ts#L86-L92
+  const verifiedResults: Array<{ signingTime: Date; signerSerialNumber: string }> = [];
+
   for (const tsData of timestampData.rfc3161Timestamps) {
     // Decode the base64-encoded timestamp
     const timestampBytes = base64ToUint8Array(tsData.signedTimestamp);
@@ -193,8 +187,25 @@ export async function verifyBundleTimestamp(
       signature,
       timestampAuthorities
     );
-    verifiedTimestamps.push(signingTime);
+
+    verifiedResults.push({
+      signingTime,
+      signerSerialNumber: Array.from(timestamp.signerSerialNumber).join(','),
+    });
   }
 
-  return verifiedTimestamps;
+  // Check for duplicate timestamps using deep equality on parsed values
+  // sigstore-js uses isDeepStrictEqual on {type, logID, timestamp} objects
+  for (let i = 0; i < verifiedResults.length; i++) {
+    for (let j = i + 1; j < verifiedResults.length; j++) {
+      if (
+        verifiedResults[i].signingTime.getTime() === verifiedResults[j].signingTime.getTime() &&
+        verifiedResults[i].signerSerialNumber === verifiedResults[j].signerSerialNumber
+      ) {
+        throw new Error("Duplicate TSA timestamp detected");
+      }
+    }
+  }
+
+  return verifiedResults.map(r => r.signingTime);
 }
