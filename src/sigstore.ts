@@ -36,6 +36,37 @@ import { verifyTLogBody } from "./tlog/body.js";
 import { verifyBundleTimestamp } from "./timestamp/tsa.js";
 import { TrustedRootProvider } from "./trust/tuf.js";
 
+const MEDIA_TYPE_BASE = "application/vnd.dev.sigstore.bundle";
+
+/**
+ * Extract bundle version from mediaType string
+ * Reference: https://github.com/sigstore/sigstore-go/blob/main/pkg/bundle/bundle.go#L159-L177
+ */
+function getBundleVersion(mediaType: string): string {
+  switch (mediaType) {
+    case `${MEDIA_TYPE_BASE}+json;version=0.1`:
+      return "0.1";
+    case `${MEDIA_TYPE_BASE}+json;version=0.2`:
+      return "0.2";
+    case `${MEDIA_TYPE_BASE}+json;version=0.3`:
+      return "0.3";
+  }
+
+  // New format: "application/vnd.dev.sigstore.bundle.v0.3+json"
+  if (mediaType.startsWith(`${MEDIA_TYPE_BASE}.v`) && mediaType.endsWith("+json")) {
+    const version = mediaType
+      .replace(`${MEDIA_TYPE_BASE}.v`, "")
+      .replace("+json", "");
+    // Basic semver validation (major.minor or major.minor.patch)
+    if (/^\d+\.\d+(\.\d+)?$/.test(version)) {
+      return version;
+    }
+  }
+
+  // Default to 0.1 for unknown formats
+  return "0.1";
+}
+
 export interface SigstoreVerifierOptions {
   tlogThreshold?: number;
   ctlogThreshold?: number;
@@ -387,9 +418,8 @@ export class SigstoreVerifier {
     const entry = entries[0];
 
     // Extract bundle version from mediaType
-    // e.g., "application/vnd.dev.sigstore.bundle+json;version=0.2"
-    const versionMatch = bundle.mediaType.match(/version=(\d+\.\d+)/);
-    const bundleVersion = versionMatch ? versionMatch[1] : "0.1";
+    // Reference: https://github.com/sigstore/sigstore-go/blob/main/pkg/bundle/bundle.go#L159-L177
+    const bundleVersion = getBundleVersion(bundle.mediaType);
     const isV02OrLater = parseFloat(bundleVersion) >= 0.2;
 
     // Bundle v0.2+ requires an inclusion proof
