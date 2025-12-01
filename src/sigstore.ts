@@ -539,14 +539,31 @@ export class SigstoreVerifier {
         }
       }
     } else if (bodyJson.kind === "dsse") {
-      // DSSE entries store signatures differently
-      // The certificate is verified through the bundle's verification material
-      // No additional check needed here
+      // DSSE v0.0.1: certificate is in spec.signatures[0].verifier (base64-encoded PEM)
+      // https://github.com/sigstore/sigstore-go/blob/main/pkg/tlog/entry.go#L356-L357
+      const verifierContent = bodyJson.spec.signatures?.[0]?.verifier;
+      if (verifierContent) {
+        const pemString = Uint8ArrayToString(base64ToUint8Array(verifierContent));
+        const loggedCert = X509Certificate.parse(pemString);
+        if (!cert.equals(loggedCert)) {
+          throw new Error(
+            "Certificate in DSSE tlog entry does not match the signing certificate.",
+          );
+        }
+      }
     } else if (bodyJson.kind === "intoto") {
-      // Intoto entries are DSSE-based and don't store certificates in the tlog entry
-      // The certificate is part of the bundle's verification material which has already
-      // been verified against the CA root. The intoto verification in tlog/intoto.ts
-      // verifies the signature and payload hash match between the tlog and bundle.
+      // intoto v0.0.2: certificate is in spec.content.envelope.signatures[0].publicKey (base64-encoded PEM)
+      // https://github.com/sigstore/sigstore-go/blob/main/pkg/tlog/entry.go#L360-L361
+      const publicKeyContent = bodyJson.spec.content?.envelope?.signatures?.[0]?.publicKey;
+      if (publicKeyContent) {
+        const pemString = Uint8ArrayToString(base64ToUint8Array(publicKeyContent));
+        const loggedCert = X509Certificate.parse(pemString);
+        if (!cert.equals(loggedCert)) {
+          throw new Error(
+            "Certificate in intoto tlog entry does not match the signing certificate.",
+          );
+        }
+      }
     } else {
       // Unknown entry type - this should not happen with standard Sigstore bundles
       throw new Error(`Unsupported tlog entry kind: ${bodyJson.kind}`);
