@@ -12,7 +12,7 @@
  */
 
 import { base64ToUint8Array, hexToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
-import { HashAlgorithms } from "../interfaces.js";
+import { getHashAlgorithm } from "../interfaces.js";
 import type { SigstoreBundle } from "../bundle.js";
 import type { RekorEntry } from "./body.js";
 
@@ -81,16 +81,16 @@ async function verifyDSSE001Body(
     throw new Error("DSSE signature mismatch between TLog entry and bundle");
   }
 
-  const tlogHash = entry.spec.payloadHash?.value || "";
-  if (!tlogHash) {
-    throw new Error("DSSE entry missing payloadHash");
+  if (!entry.spec.payloadHash?.value || !entry.spec.payloadHash?.algorithm) {
+    throw new Error("DSSE entry missing payloadHash or algorithm");
   }
 
-  const tlogHashBytes = hexToUint8Array(tlogHash);
+  const hashAlg = getHashAlgorithm(entry.spec.payloadHash.algorithm);
+  const tlogHashBytes = hexToUint8Array(entry.spec.payloadHash.value);
 
   const payloadBytes = base64ToUint8Array(bundle.dsseEnvelope.payload);
   const bundleHashBytes = new Uint8Array(
-    await crypto.subtle.digest(HashAlgorithms.SHA256, payloadBytes as Uint8Array<ArrayBuffer>)
+    await crypto.subtle.digest(hashAlg, payloadBytes as Uint8Array<ArrayBuffer>)
   );
 
   if (!uint8ArrayEqual(tlogHashBytes, bundleHashBytes)) {
@@ -129,16 +129,16 @@ async function verifyDSSE002Body(
     throw new Error("DSSE signature mismatch between TLog entry and bundle (v0.0.2)");
   }
 
-  const tlogHash = spec.payloadHash?.digest || "";
-  if (!tlogHash) {
-    throw new Error("DSSE v0.0.2 entry missing payloadHash");
+  if (!spec.payloadHash?.digest || !spec.payloadHash?.algorithm) {
+    throw new Error("DSSE v0.0.2 entry missing payloadHash or algorithm");
   }
 
-  const tlogHashBytes = base64ToUint8Array(tlogHash);
+  const hashAlg = getHashAlgorithm(spec.payloadHash.algorithm);
+  const tlogHashBytes = base64ToUint8Array(spec.payloadHash.digest);
 
   const payloadBytes = base64ToUint8Array(bundle.dsseEnvelope.payload);
   const bundleHashBytes = new Uint8Array(
-    await crypto.subtle.digest(HashAlgorithms.SHA256, payloadBytes as Uint8Array<ArrayBuffer>)
+    await crypto.subtle.digest(hashAlg, payloadBytes as Uint8Array<ArrayBuffer>)
   );
 
   if (!uint8ArrayEqual(tlogHashBytes, bundleHashBytes)) {
