@@ -30,10 +30,10 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       - name: Install deps
-      - run: npm ci
+        run: npm ci
 
       - name: Build
-      - run: npm run build
+        run: npm run build
 
       - name: Dry-run publish
         run: npm publish --dry-run
