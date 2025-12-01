@@ -101,3 +101,23 @@ export type RawCAs = RawCA[];
 
 // Re-export crypto enums from crypto-browser (shared with tuf-browser)
 export { KeyTypes, EcdsaTypes, HashAlgorithms } from "@freedomofpress/crypto-browser";
+import { HashAlgorithms } from "@freedomofpress/crypto-browser";
+
+// Supported hash algorithms for payload hash validation
+// Rekor v1 uses lowercase (sha256), Rekor v2 uses uppercase with underscore (SHA2_256)
+const SUPPORTED_HASH_ALGORITHMS: Record<string, string> = {
+  "sha256": HashAlgorithms.SHA256,
+  "sha384": HashAlgorithms.SHA384,
+  "sha512": HashAlgorithms.SHA512,
+  "SHA2_256": HashAlgorithms.SHA256,
+  "SHA2_384": HashAlgorithms.SHA384,
+  "SHA2_512": HashAlgorithms.SHA512,
+};
+
+export function getHashAlgorithm(algorithm: string): string {
+  const hashAlg = SUPPORTED_HASH_ALGORITHMS[algorithm];
+  if (!hashAlg) {
+    throw new Error(`Unsupported hash algorithm: ${algorithm}`);
+  }
+  return hashAlg;
+}

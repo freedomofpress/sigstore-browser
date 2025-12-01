@@ -152,53 +152,60 @@ async function verifyTimestampForCA(
 }
 
 /**
- * Extracts the verified timestamp from a bundle's timestamp verification data
+ * Verifies all timestamps in a bundle's timestamp verification data
  *
- * New functionality for Sigstore bundle integration (not in sigstore-js reference)
+ * Matches sigstore-js behavior: all timestamps must successfully verify.
+ * Reference: https://github.com/sigstore/sigstore-js/blob/main/packages/verify/src/verifier.ts#L64-L108
  *
  * @param timestampData - The timestamp verification data from the bundle
  * @param signature - The signature being verified
  * @param timestampAuthorities - List of trusted timestamp authorities
- * @returns The verified signing time, or undefined if no timestamp
+ * @returns Array of verified signing times (empty if no timestamps present)
+ * @throws Error if any timestamp fails verification or duplicates are found
  */
 export async function verifyBundleTimestamp(
   timestampData: any,
   signature: Uint8Array,
   timestampAuthorities: RawTimestampAuthority[]
-): Promise<Date | undefined> {
+): Promise<Date[]> {
   if (!timestampData?.rfc3161Timestamps?.length) {
-    return undefined;
+    return [];
   }
 
-  // Check for duplicate timestamps
-  const seenTimestamps = new Set<string>();
+  // Verify ALL timestamps - each must succeed (matches sigstore-js behavior)
+  // Collect verification results for duplicate checking after verification
+  // Reference: https://github.com/sigstore/sigstore-js/blob/main/packages/verify/src/verifier.ts#L86-L92
+  const verifiedResults: Array<{ signingTime: Date; signerSerialNumber: string }> = [];
+
   for (const tsData of timestampData.rfc3161Timestamps) {
-    if (seenTimestamps.has(tsData.signedTimestamp)) {
-      throw new Error("Duplicate TSA timestamp detected");
-    }
-    seenTimestamps.add(tsData.signedTimestamp);
+    // Decode the base64-encoded timestamp
+    const timestampBytes = base64ToUint8Array(tsData.signedTimestamp);
+    const timestamp = RFC3161Timestamp.parse(timestampBytes);
+
+    const signingTime = await verifyRFC3161Timestamp(
+      timestamp,
+      signature,
+      timestampAuthorities
+    );
+
+    verifiedResults.push({
+      signingTime,
+      signerSerialNumber: Array.from(timestamp.signerSerialNumber).join(','),
+    });
   }
 
-  // Process each RFC3161 timestamp
-  const errors: string[] = [];
-  for (const tsData of timestampData.rfc3161Timestamps) {
-    try {
-      // Decode the base64-encoded timestamp
-      const timestampBytes = base64ToUint8Array(tsData.signedTimestamp);
-      const timestamp = RFC3161Timestamp.parse(timestampBytes);
-
-      const signingTime = await verifyRFC3161Timestamp(
-        timestamp,
-        signature,
-        timestampAuthorities
-      );
-      return signingTime;
-    } catch (e) {
-      // Continue to next timestamp if this one fails
-      errors.push(e instanceof Error ? e.message : String(e));
-      continue;
+  // Check for duplicate timestamps using deep equality on parsed values
+  // sigstore-js uses isDeepStrictEqual on {type, logID, timestamp} objects
+  for (let i = 0; i < verifiedResults.length; i++) {
+    for (let j = i + 1; j < verifiedResults.length; j++) {
+      if (
+        verifiedResults[i].signingTime.getTime() === verifiedResults[j].signingTime.getTime() &&
+        verifiedResults[i].signerSerialNumber === verifiedResults[j].signerSerialNumber
+      ) {
+        throw new Error("Duplicate TSA timestamp detected");
+      }
     }
   }
 
-  throw new Error(`No valid RFC3161 timestamps found. Errors: ${errors.join(', ')}`);
+  return verifiedResults.map(r => r.signingTime);
 }

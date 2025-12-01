@@ -36,6 +36,37 @@ import { verifyTLogBody } from "./tlog/body.js";
 import { verifyBundleTimestamp } from "./timestamp/tsa.js";
 import { TrustedRootProvider } from "./trust/tuf.js";
 
+const MEDIA_TYPE_BASE = "application/vnd.dev.sigstore.bundle";
+
+/**
+ * Extract bundle version from mediaType string
+ * Reference: https://github.com/sigstore/sigstore-go/blob/main/pkg/bundle/bundle.go#L159-L177
+ */
+function getBundleVersion(mediaType: string): string {
+  switch (mediaType) {
+    case `${MEDIA_TYPE_BASE}+json;version=0.1`:
+      return "0.1";
+    case `${MEDIA_TYPE_BASE}+json;version=0.2`:
+      return "0.2";
+    case `${MEDIA_TYPE_BASE}+json;version=0.3`:
+      return "0.3";
+  }
+
+  // New format: "application/vnd.dev.sigstore.bundle.v0.3+json"
+  if (mediaType.startsWith(`${MEDIA_TYPE_BASE}.v`) && mediaType.endsWith("+json")) {
+    const version = mediaType
+      .replace(`${MEDIA_TYPE_BASE}.v`, "")
+      .replace("+json", "");
+    // Basic semver validation (major.minor or major.minor.patch)
+    if (/^\d+\.\d+(\.\d+)?$/.test(version)) {
+      return version;
+    }
+  }
+
+  // Default to 0.1 for unknown formats
+  return "0.1";
+}
+
 export interface SigstoreVerifierOptions {
   tlogThreshold?: number;
   ctlogThreshold?: number;
@@ -387,9 +418,8 @@ export class SigstoreVerifier {
     const entry = entries[0];
 
     // Extract bundle version from mediaType
-    // e.g., "application/vnd.dev.sigstore.bundle+json;version=0.2"
-    const versionMatch = bundle.mediaType.match(/version=(\d+\.\d+)/);
-    const bundleVersion = versionMatch ? versionMatch[1] : "0.1";
+    // Reference: https://github.com/sigstore/sigstore-go/blob/main/pkg/bundle/bundle.go#L159-L177
+    const bundleVersion = getBundleVersion(bundle.mediaType);
     const isV02OrLater = parseFloat(bundleVersion) >= 0.2;
 
     // Bundle v0.2+ requires an inclusion proof
@@ -509,14 +539,31 @@ export class SigstoreVerifier {
         }
       }
     } else if (bodyJson.kind === "dsse") {
-      // DSSE entries store signatures differently
-      // The certificate is verified through the bundle's verification material
-      // No additional check needed here
+      // DSSE v0.0.1: certificate is in spec.signatures[0].verifier (base64-encoded PEM)
+      // https://github.com/sigstore/sigstore-go/blob/main/pkg/tlog/entry.go#L356-L357
+      const verifierContent = bodyJson.spec.signatures?.[0]?.verifier;
+      if (verifierContent) {
+        const pemString = Uint8ArrayToString(base64ToUint8Array(verifierContent));
+        const loggedCert = X509Certificate.parse(pemString);
+        if (!cert.equals(loggedCert)) {
+          throw new Error(
+            "Certificate in DSSE tlog entry does not match the signing certificate.",
+          );
+        }
+      }
     } else if (bodyJson.kind === "intoto") {
-      // Intoto entries are DSSE-based and don't store certificates in the tlog entry
-      // The certificate is part of the bundle's verification material which has already
-      // been verified against the CA root. The intoto verification in tlog/intoto.ts
-      // verifies the signature and payload hash match between the tlog and bundle.
+      // intoto v0.0.2: certificate is in spec.content.envelope.signatures[0].publicKey (base64-encoded PEM)
+      // https://github.com/sigstore/sigstore-go/blob/main/pkg/tlog/entry.go#L360-L361
+      const publicKeyContent = bodyJson.spec.content?.envelope?.signatures?.[0]?.publicKey;
+      if (publicKeyContent) {
+        const pemString = Uint8ArrayToString(base64ToUint8Array(publicKeyContent));
+        const loggedCert = X509Certificate.parse(pemString);
+        if (!cert.equals(loggedCert)) {
+          throw new Error(
+            "Certificate in intoto tlog entry does not match the signing certificate.",
+          );
+        }
+      }
     } else {
       // Unknown entry type - this should not happen with standard Sigstore bundles
       throw new Error(`Unsupported tlog entry kind: ${bodyJson.kind}`);
@@ -534,15 +581,17 @@ export class SigstoreVerifier {
       throw new Error("No transparency log entries found in bundle");
     }
 
-    const entry = bundle.verificationMaterial.tlogEntries[0];
+    // Verify inclusion proof for ALL entries, not just the first one
+    // Reference: https://github.com/sigstore/sigstore-go/blob/main/pkg/verify/tlog.go#L74-L127
+    for (const entry of bundle.verificationMaterial.tlogEntries) {
+      // Only verify if there's an inclusion proof (v0.3/rekor2 bundles)
+      // v0.1 bundles use inclusion promises instead, verified in verifyInclusionPromise
+      if (entry.inclusionProof) {
+        await verifyMerkleInclusion(entry);
 
-    // Only verify if there's an inclusion proof (v0.3/rekor2 bundles)
-    // v0.1 bundles use inclusion promises instead, verified in verifyInclusionPromise
-    if (entry.inclusionProof) {
-      await verifyMerkleInclusion(entry);
-
-      if (entry.inclusionProof.checkpoint) {
-        await verifyCheckpoint(entry, this.rawRoot.tlogs);
+        if (entry.inclusionProof.checkpoint) {
+          await verifyCheckpoint(entry, this.rawRoot.tlogs);
+        }
       }
     }
   }
@@ -631,18 +680,24 @@ export class SigstoreVerifier {
       await verifyTLogBody(entry, bundle);
     }
 
-    // # 6 TSA Timestamp Verification (if present)
-    let verifiedTimestamp: Date | undefined;
-    if (bundle.verificationMaterial.timestampVerificationData) {
-      // Verify TSA timestamps if present
-      verifiedTimestamp = await verifyBundleTimestamp(
-        bundle.verificationMaterial.timestampVerificationData,
-        signature,
-        this.rawRoot?.timestampAuthorities || []
-      );
+    // # 6 TSA Timestamp Verification
+    // Verify all timestamps and enforce threshold
+    // Reference: https://github.com/sigstore/sigstore-js/blob/main/packages/verify/src/verifier.ts#L101-L106
+    const verifiedTimestamps = await verifyBundleTimestamp(
+      bundle.verificationMaterial.timestampVerificationData,
+      signature,
+      this.rawRoot?.timestampAuthorities || []
+    );
 
-      // If we have a verified timestamp, check certificate validity at that time
-      if (verifiedTimestamp && !signingCert.validForDate(verifiedTimestamp)) {
+    if (verifiedTimestamps.length < this.options.tsaThreshold) {
+      throw new Error(
+        `Not enough verified TSA timestamps: ${verifiedTimestamps.length} < ${this.options.tsaThreshold}`
+      );
+    }
+
+    // If we have verified timestamps, check certificate validity at each timestamp time
+    for (const verifiedTimestamp of verifiedTimestamps) {
+      if (!signingCert.validForDate(verifiedTimestamp)) {
         throw new Error(
           "Certificate was not valid at the time of timestamping"
         );

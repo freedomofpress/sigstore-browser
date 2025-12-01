@@ -112,7 +112,11 @@ export class SignedCertificateTimestamp {
     const stream = new ByteStream(buf);
 
     // Version - enum { v1(0), (255) }
+    // RFC 6962 specifies only v1(0) is valid (for now)
     const version = stream.getUint8();
+    if (version !== 0) {
+      throw new Error(`Unsupported SCT version: ${version} (expected 0 for v1)`);
+    }
 
     // Log ID  - struct { opaque key_id[32]; }
     const logID = stream.getBlock(32);

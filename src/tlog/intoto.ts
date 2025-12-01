@@ -11,7 +11,7 @@
  */
 
 import { base64Decode, base64ToUint8Array, hexToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
-import { HashAlgorithms } from "../interfaces.js";
+import { getHashAlgorithm } from "../interfaces.js";
 import type { SigstoreBundle } from "../bundle.js";
 import type { RekorEntry } from "./body.js";
 
@@ -87,12 +87,16 @@ export async function verifyIntotoBody(
   }
 
   if (intotoEntry.spec.content.payloadHash) {
-    const tlogHash = intotoEntry.spec.content.payloadHash.value;
-    const tlogHashBytes = hexToUint8Array(tlogHash);
+    if (!intotoEntry.spec.content.payloadHash.algorithm) {
+      throw new Error("Intoto entry missing payloadHash algorithm");
+    }
+
+    const hashAlg = getHashAlgorithm(intotoEntry.spec.content.payloadHash.algorithm);
+    const tlogHashBytes = hexToUint8Array(intotoEntry.spec.content.payloadHash.value);
 
     const payloadBytes = base64ToUint8Array(bundle.dsseEnvelope.payload);
     const bundleHashBytes = new Uint8Array(
-      await crypto.subtle.digest(HashAlgorithms.SHA256, payloadBytes as Uint8Array<ArrayBuffer>)
+      await crypto.subtle.digest(hashAlg, payloadBytes as Uint8Array<ArrayBuffer>)
     );
 
     if (!uint8ArrayEqual(tlogHashBytes, bundleHashBytes)) {
