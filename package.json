@@ -3,15 +3,17 @@
   "version": "0.1.4",
   "description": "A minimal browser-only Sigstore verification library.",
   "main": "dist/index.js",
+  "browser": "dist/sigstore.min.js",
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "browser": "./dist/sigstore.min.js",
       "default": "./dist/index.js"
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "vite build && tsc",
     "test": "vitest run --config vite.config.playwright.ts",
     "test:node": "vitest run",
     "coverage": "vitest run --coverage",
@@ -27,6 +29,7 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^24.0.14",
+    "vite": "^6.3.5",
     "@vitest/browser": "^3.2.4",
     "@vitest/coverage-v8": "^3.2.4",
     "eslint-plugin-simple-import-sort": "^12.1.1",
