@@ -26,25 +26,68 @@ import { DEFAULT_HASH_ALGORITHM, ECDSA_CURVE_NAMES, ECDSA_SIGNATURE_ALGOS, OID_R
 import {
   X509AuthorityKeyIDExtension,
   X509BasicConstraintsExtension,
+  X509BuildConfigDigestExtension,
+  X509BuildConfigURIExtension,
+  X509BuildSignerDigestExtension,
+  X509BuildSignerURIExtension,
+  X509BuildTriggerExtension,
   X509Extension,
   X509FulcioIssuerV1,
   X509FulcioIssuerV2,
+  X509GitHubWorkflowNameExtension,
+  X509GitHubWorkflowRefExtension,
+  X509GitHubWorkflowRepositoryExtension,
+  X509GitHubWorkflowSHAExtension,
+  X509GitHubWorkflowTriggerExtension,
   X509KeyUsageExtension,
+  X509RunInvocationURIExtension,
+  X509RunnerEnvironmentExtension,
   X509SCTExtension,
+  X509SourceRepositoryDigestExtension,
+  X509SourceRepositoryIdentifierExtension,
+  X509SourceRepositoryOwnerIdentifierExtension,
+  X509SourceRepositoryOwnerURIExtension,
+  X509SourceRepositoryRefExtension,
+  X509SourceRepositoryURIExtension,
+  X509SourceRepositoryVisibilityExtension,
   X509SubjectAlternativeNameExtension,
   X509SubjectKeyIDExtension,
 } from "./ext.js";
 
-// https://github.com/sigstore/fulcio/blob/main/docs/oid-info.md
+// Standard X.509 extension OIDs
 const EXTENSION_OID_SUBJECT_KEY_ID = "2.5.29.14";
 const EXTENSION_OID_KEY_USAGE = "2.5.29.15";
 const EXTENSION_OID_SUBJECT_ALT_NAME = "2.5.29.17";
 const EXTENSION_OID_BASIC_CONSTRAINTS = "2.5.29.19";
 const EXTENSION_OID_AUTHORITY_KEY_ID = "2.5.29.35";
-const EXTENSION_OID_FULCIO_ISSUER_V1 = "1.3.6.1.4.1.57264.1.1";
-const EXTENSION_OID_FULCIO_ISSUER_V2 = "1.3.6.1.4.1.57264.1.8";
 
+// CT Log SCT extension OID
 export const EXTENSION_OID_SCT = "1.3.6.1.4.1.11129.2.4.2";
+
+// Fulcio extension OIDs
+// https://github.com/sigstore/fulcio/blob/main/docs/oid-info.md
+export const EXTENSION_OID_FULCIO_ISSUER_V1 = "1.3.6.1.4.1.57264.1.1";
+export const EXTENSION_OID_GITHUB_WORKFLOW_TRIGGER = "1.3.6.1.4.1.57264.1.2";
+export const EXTENSION_OID_GITHUB_WORKFLOW_SHA = "1.3.6.1.4.1.57264.1.3";
+export const EXTENSION_OID_GITHUB_WORKFLOW_NAME = "1.3.6.1.4.1.57264.1.4";
+export const EXTENSION_OID_GITHUB_WORKFLOW_REPOSITORY = "1.3.6.1.4.1.57264.1.5";
+export const EXTENSION_OID_GITHUB_WORKFLOW_REF = "1.3.6.1.4.1.57264.1.6";
+export const EXTENSION_OID_OTHERNAME = "1.3.6.1.4.1.57264.1.7";
+export const EXTENSION_OID_FULCIO_ISSUER_V2 = "1.3.6.1.4.1.57264.1.8";
+export const EXTENSION_OID_BUILD_SIGNER_URI = "1.3.6.1.4.1.57264.1.9";
+export const EXTENSION_OID_BUILD_SIGNER_DIGEST = "1.3.6.1.4.1.57264.1.10";
+export const EXTENSION_OID_RUNNER_ENVIRONMENT = "1.3.6.1.4.1.57264.1.11";
+export const EXTENSION_OID_SOURCE_REPOSITORY_URI = "1.3.6.1.4.1.57264.1.12";
+export const EXTENSION_OID_SOURCE_REPOSITORY_DIGEST = "1.3.6.1.4.1.57264.1.13";
+export const EXTENSION_OID_SOURCE_REPOSITORY_REF = "1.3.6.1.4.1.57264.1.14";
+export const EXTENSION_OID_SOURCE_REPOSITORY_IDENTIFIER = "1.3.6.1.4.1.57264.1.15";
+export const EXTENSION_OID_SOURCE_REPOSITORY_OWNER_URI = "1.3.6.1.4.1.57264.1.16";
+export const EXTENSION_OID_SOURCE_REPOSITORY_OWNER_IDENTIFIER = "1.3.6.1.4.1.57264.1.17";
+export const EXTENSION_OID_BUILD_CONFIG_URI = "1.3.6.1.4.1.57264.1.18";
+export const EXTENSION_OID_BUILD_CONFIG_DIGEST = "1.3.6.1.4.1.57264.1.19";
+export const EXTENSION_OID_BUILD_TRIGGER = "1.3.6.1.4.1.57264.1.20";
+export const EXTENSION_OID_RUN_INVOCATION_URI = "1.3.6.1.4.1.57264.1.21";
+export const EXTENSION_OID_SOURCE_REPOSITORY_VISIBILITY = "1.3.6.1.4.1.57264.1.22";
 
 export class X509Certificate {
   public root: ASN1Obj;
@@ -234,6 +277,101 @@ export class X509Certificate {
   get extFulcioIssuerV2(): X509FulcioIssuerV2 | undefined {
     const ext = this.findExtension(EXTENSION_OID_FULCIO_ISSUER_V2);
     return ext ? new X509FulcioIssuerV2(ext) : undefined;
+  }
+
+  get extGitHubWorkflowTrigger(): X509GitHubWorkflowTriggerExtension | undefined {
+    const ext = this.findExtension(EXTENSION_OID_GITHUB_WORKFLOW_TRIGGER);
+    return ext ? new X509GitHubWorkflowTriggerExtension(ext) : undefined;
+  }
+
+  get extGitHubWorkflowSHA(): X509GitHubWorkflowSHAExtension | undefined {
+    const ext = this.findExtension(EXTENSION_OID_GITHUB_WORKFLOW_SHA);
+    return ext ? new X509GitHubWorkflowSHAExtension(ext) : undefined;
+  }
+
+  get extGitHubWorkflowName(): X509GitHubWorkflowNameExtension | undefined {
+    const ext = this.findExtension(EXTENSION_OID_GITHUB_WORKFLOW_NAME);
+    return ext ? new X509GitHubWorkflowNameExtension(ext) : undefined;
+  }
+
+  get extGitHubWorkflowRepository(): X509GitHubWorkflowRepositoryExtension | undefined {
+    const ext = this.findExtension(EXTENSION_OID_GITHUB_WORKFLOW_REPOSITORY);
+    return ext ? new X509GitHubWorkflowRepositoryExtension(ext) : undefined;
+  }
+
+  get extGitHubWorkflowRef(): X509GitHubWorkflowRefExtension | undefined {
+    const ext = this.findExtension(EXTENSION_OID_GITHUB_WORKFLOW_REF);
+    return ext ? new X509GitHubWorkflowRefExtension(ext) : undefined;
+  }
+
+  get extBuildSignerURI(): X509BuildSignerURIExtension | undefined {
+    const ext = this.findExtension(EXTENSION_OID_BUILD_SIGNER_URI);
+    return ext ? new X509BuildSignerURIExtension(ext) : undefined;
+  }
+
+  get extBuildSignerDigest(): X509BuildSignerDigestExtension | undefined {
+    const ext = this.findExtension(EXTENSION_OID_BUILD_SIGNER_DIGEST);
+    return ext ? new X509BuildSignerDigestExtension(ext) : undefined;
+  }
+
+  get extRunnerEnvironment(): X509RunnerEnvironmentExtension | undefined {
+    const ext = this.findExtension(EXTENSION_OID_RUNNER_ENVIRONMENT);
+    return ext ? new X509RunnerEnvironmentExtension(ext) : undefined;
+  }
+
+  get extSourceRepositoryURI(): X509SourceRepositoryURIExtension | undefined {
+    const ext = this.findExtension(EXTENSION_OID_SOURCE_REPOSITORY_URI);
+    return ext ? new X509SourceRepositoryURIExtension(ext) : undefined;
+  }
+
+  get extSourceRepositoryDigest(): X509SourceRepositoryDigestExtension | undefined {
+    const ext = this.findExtension(EXTENSION_OID_SOURCE_REPOSITORY_DIGEST);
+    return ext ? new X509SourceRepositoryDigestExtension(ext) : undefined;
+  }
+
+  get extSourceRepositoryRef(): X509SourceRepositoryRefExtension | undefined {
+    const ext = this.findExtension(EXTENSION_OID_SOURCE_REPOSITORY_REF);
+    return ext ? new X509SourceRepositoryRefExtension(ext) : undefined;
+  }
+
+  get extSourceRepositoryIdentifier(): X509SourceRepositoryIdentifierExtension | undefined {
+    const ext = this.findExtension(EXTENSION_OID_SOURCE_REPOSITORY_IDENTIFIER);
+    return ext ? new X509SourceRepositoryIdentifierExtension(ext) : undefined;
+  }
+
+  get extSourceRepositoryOwnerURI(): X509SourceRepositoryOwnerURIExtension | undefined {
+    const ext = this.findExtension(EXTENSION_OID_SOURCE_REPOSITORY_OWNER_URI);
+    return ext ? new X509SourceRepositoryOwnerURIExtension(ext) : undefined;
+  }
+
+  get extSourceRepositoryOwnerIdentifier(): X509SourceRepositoryOwnerIdentifierExtension | undefined {
+    const ext = this.findExtension(EXTENSION_OID_SOURCE_REPOSITORY_OWNER_IDENTIFIER);
+    return ext ? new X509SourceRepositoryOwnerIdentifierExtension(ext) : undefined;
+  }
+
+  get extBuildConfigURI(): X509BuildConfigURIExtension | undefined {
+    const ext = this.findExtension(EXTENSION_OID_BUILD_CONFIG_URI);
+    return ext ? new X509BuildConfigURIExtension(ext) : undefined;
+  }
+
+  get extBuildConfigDigest(): X509BuildConfigDigestExtension | undefined {
+    const ext = this.findExtension(EXTENSION_OID_BUILD_CONFIG_DIGEST);
+    return ext ? new X509BuildConfigDigestExtension(ext) : undefined;
+  }
+
+  get extBuildTrigger(): X509BuildTriggerExtension | undefined {
+    const ext = this.findExtension(EXTENSION_OID_BUILD_TRIGGER);
+    return ext ? new X509BuildTriggerExtension(ext) : undefined;
+  }
+
+  get extRunInvocationURI(): X509RunInvocationURIExtension | undefined {
+    const ext = this.findExtension(EXTENSION_OID_RUN_INVOCATION_URI);
+    return ext ? new X509RunInvocationURIExtension(ext) : undefined;
+  }
+
+  get extSourceRepositoryVisibility(): X509SourceRepositoryVisibilityExtension | undefined {
+    const ext = this.findExtension(EXTENSION_OID_SOURCE_REPOSITORY_VISIBILITY);
+    return ext ? new X509SourceRepositoryVisibilityExtension(ext) : undefined;
   }
 
   get isCA(): boolean {

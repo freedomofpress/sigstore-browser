@@ -161,19 +161,165 @@ export class X509SubjectKeyIDExtension extends X509Extension {
   }
 }
 
-// Fulcio Issuer V1 extension - OID 1.3.6.1.4.1.57264.1.1
-// Simple OCTET STRING containing the issuer
-export class X509FulcioIssuerV1 extends X509Extension {
-  get issuer(): string {
+// Base class for Fulcio extensions with V1 format (raw OCTET STRING value)
+// https://github.com/sigstore/fulcio/blob/main/docs/oid-info.md
+class X509FulcioExtensionV1 extends X509Extension {
+  get stringValue(): string {
     return Uint8ArrayToString(this.extnValueObj.value);
   }
 }
 
-// Fulcio Issuer V2 extension - OID 1.3.6.1.4.1.57264.1.8
-// SEQUENCE containing the issuer as the first element
-export class X509FulcioIssuerV2 extends X509Extension {
-  get issuer(): string {
+// Base class for Fulcio extensions with V2 format (DER-encoded UTF8String)
+class X509FulcioExtensionV2 extends X509Extension {
+  get stringValue(): string {
     return Uint8ArrayToString(this.extnValueObj.subs[0].value);
+  }
+}
+
+// OID 1.3.6.1.4.1.57264.1.1 - OIDC Issuer (V1)
+export class X509FulcioIssuerV1 extends X509FulcioExtensionV1 {
+  get issuer(): string {
+    return this.stringValue;
+  }
+}
+
+// OID 1.3.6.1.4.1.57264.1.2 - GitHub Workflow Trigger (V1)
+export class X509GitHubWorkflowTriggerExtension extends X509FulcioExtensionV1 {
+  get workflowTrigger(): string {
+    return this.stringValue;
+  }
+}
+
+// OID 1.3.6.1.4.1.57264.1.3 - GitHub Workflow SHA (V1)
+export class X509GitHubWorkflowSHAExtension extends X509FulcioExtensionV1 {
+  get workflowSHA(): string {
+    return this.stringValue;
+  }
+}
+
+// OID 1.3.6.1.4.1.57264.1.4 - GitHub Workflow Name (V1)
+export class X509GitHubWorkflowNameExtension extends X509FulcioExtensionV1 {
+  get workflowName(): string {
+    return this.stringValue;
+  }
+}
+
+// OID 1.3.6.1.4.1.57264.1.5 - GitHub Workflow Repository (V1)
+export class X509GitHubWorkflowRepositoryExtension extends X509FulcioExtensionV1 {
+  get workflowRepository(): string {
+    return this.stringValue;
+  }
+}
+
+// OID 1.3.6.1.4.1.57264.1.6 - GitHub Workflow Ref (V1)
+export class X509GitHubWorkflowRefExtension extends X509FulcioExtensionV1 {
+  get workflowRef(): string {
+    return this.stringValue;
+  }
+}
+
+// OID 1.3.6.1.4.1.57264.1.8 - OIDC Issuer (V2)
+export class X509FulcioIssuerV2 extends X509FulcioExtensionV2 {
+  get issuer(): string {
+    return this.stringValue;
+  }
+}
+
+// OID 1.3.6.1.4.1.57264.1.9 - Build Signer URI (V2)
+export class X509BuildSignerURIExtension extends X509FulcioExtensionV2 {
+  get buildSignerURI(): string {
+    return this.stringValue;
+  }
+}
+
+// OID 1.3.6.1.4.1.57264.1.10 - Build Signer Digest (V2)
+export class X509BuildSignerDigestExtension extends X509FulcioExtensionV2 {
+  get buildSignerDigest(): string {
+    return this.stringValue;
+  }
+}
+
+// OID 1.3.6.1.4.1.57264.1.11 - Runner Environment (V2)
+export class X509RunnerEnvironmentExtension extends X509FulcioExtensionV2 {
+  get runnerEnvironment(): string {
+    return this.stringValue;
+  }
+}
+
+// OID 1.3.6.1.4.1.57264.1.12 - Source Repository URI (V2)
+export class X509SourceRepositoryURIExtension extends X509FulcioExtensionV2 {
+  get sourceRepositoryURI(): string {
+    return this.stringValue;
+  }
+}
+
+// OID 1.3.6.1.4.1.57264.1.13 - Source Repository Digest (V2)
+export class X509SourceRepositoryDigestExtension extends X509FulcioExtensionV2 {
+  get sourceRepositoryDigest(): string {
+    return this.stringValue;
+  }
+}
+
+// OID 1.3.6.1.4.1.57264.1.14 - Source Repository Ref (V2)
+export class X509SourceRepositoryRefExtension extends X509FulcioExtensionV2 {
+  get sourceRepositoryRef(): string {
+    return this.stringValue;
+  }
+}
+
+// OID 1.3.6.1.4.1.57264.1.15 - Source Repository Identifier (V2)
+export class X509SourceRepositoryIdentifierExtension extends X509FulcioExtensionV2 {
+  get sourceRepositoryIdentifier(): string {
+    return this.stringValue;
+  }
+}
+
+// OID 1.3.6.1.4.1.57264.1.16 - Source Repository Owner URI (V2)
+export class X509SourceRepositoryOwnerURIExtension extends X509FulcioExtensionV2 {
+  get sourceRepositoryOwnerURI(): string {
+    return this.stringValue;
+  }
+}
+
+// OID 1.3.6.1.4.1.57264.1.17 - Source Repository Owner Identifier (V2)
+export class X509SourceRepositoryOwnerIdentifierExtension extends X509FulcioExtensionV2 {
+  get sourceRepositoryOwnerIdentifier(): string {
+    return this.stringValue;
+  }
+}
+
+// OID 1.3.6.1.4.1.57264.1.18 - Build Config URI (V2)
+export class X509BuildConfigURIExtension extends X509FulcioExtensionV2 {
+  get buildConfigURI(): string {
+    return this.stringValue;
+  }
+}
+
+// OID 1.3.6.1.4.1.57264.1.19 - Build Config Digest (V2)
+export class X509BuildConfigDigestExtension extends X509FulcioExtensionV2 {
+  get buildConfigDigest(): string {
+    return this.stringValue;
+  }
+}
+
+// OID 1.3.6.1.4.1.57264.1.20 - Build Trigger (V2)
+export class X509BuildTriggerExtension extends X509FulcioExtensionV2 {
+  get buildTrigger(): string {
+    return this.stringValue;
+  }
+}
+
+// OID 1.3.6.1.4.1.57264.1.21 - Run Invocation URI (V2)
+export class X509RunInvocationURIExtension extends X509FulcioExtensionV2 {
+  get runInvocationURI(): string {
+    return this.stringValue;
+  }
+}
+
+// OID 1.3.6.1.4.1.57264.1.22 - Source Repository Visibility (V2)
+export class X509SourceRepositoryVisibilityExtension extends X509FulcioExtensionV2 {
+  get sourceRepositoryVisibility(): string {
+    return this.stringValue;
   }
 }
 
