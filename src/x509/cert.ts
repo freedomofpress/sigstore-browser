@@ -64,6 +64,23 @@ const EXTENSION_OID_AUTHORITY_KEY_ID = "2.5.29.35";
 // CT Log SCT extension OID
 export const EXTENSION_OID_SCT = "1.3.6.1.4.1.11129.2.4.2";
 
+// Distinguished Name attribute OIDs (X.500)
+const DN_OID_COMMON_NAME = "2.5.4.3";
+const DN_OID_COUNTRY = "2.5.4.6";
+const DN_OID_LOCALITY = "2.5.4.7";
+const DN_OID_STATE = "2.5.4.8";
+const DN_OID_ORGANIZATION = "2.5.4.10";
+const DN_OID_ORGANIZATIONAL_UNIT = "2.5.4.11";
+
+const DN_OID_TO_NAME: Record<string, string> = {
+  [DN_OID_COMMON_NAME]: "CN",
+  [DN_OID_COUNTRY]: "C",
+  [DN_OID_LOCALITY]: "L",
+  [DN_OID_STATE]: "ST",
+  [DN_OID_ORGANIZATION]: "O",
+  [DN_OID_ORGANIZATIONAL_UNIT]: "OU",
+};
+
 // Fulcio extension OIDs
 // https://github.com/sigstore/fulcio/blob/main/docs/oid-info.md
 export const EXTENSION_OID_FULCIO_ISSUER_V1 = "1.3.6.1.4.1.57264.1.1";
@@ -132,6 +149,24 @@ export class X509Certificate {
 
   get subject(): Uint8Array {
     return this.subjectObj.value;
+  }
+
+  /**
+   * Returns the issuer distinguished name as a Map of attribute names to values.
+   * Common attributes: CN (Common Name), O (Organization), L (Locality),
+   * ST (State), C (Country), OU (Organizational Unit)
+   */
+  get issuerDN(): Map<string, string> {
+    return this.parseDistinguishedName(this.issuerObj);
+  }
+
+  /**
+   * Returns the subject distinguished name as a Map of attribute names to values.
+   * Common attributes: CN (Common Name), O (Organization), L (Locality),
+   * ST (State), C (Country), OU (Organizational Unit)
+   */
+  get subjectDN(): Map<string, string> {
+    return this.parseDistinguishedName(this.subjectObj);
   }
 
   get publicKey(): Uint8Array {
@@ -501,5 +536,34 @@ export class X509Certificate {
     return this.tbsCertificateObj.subs.find((sub) =>
       sub.tag.isContextSpecific(0x03),
     );
+  }
+
+  // Parse a Distinguished Name (issuer or subject) ASN1Obj into a Map
+  // DN structure: SEQUENCE of SET of SEQUENCE (AttributeTypeAndValue)
+  // Each AttributeTypeAndValue is [OID, value]
+  private parseDistinguishedName(dnObj: ASN1Obj): Map<string, string> {
+    const result = new Map<string, string>();
+
+    // Iterate over RDNs (RelativeDistinguishedName - each is a SET)
+    for (const rdn of dnObj.subs) {
+      // Each RDN contains one or more AttributeTypeAndValue (SEQUENCE)
+      for (const atv of rdn.subs) {
+        if (atv.subs.length >= 2) {
+          const oidObj = atv.subs[0];
+          const valueObj = atv.subs[1];
+
+          if (oidObj.tag.isOID()) {
+            const oid = oidObj.toOID();
+            const attrName = DN_OID_TO_NAME[oid];
+            if (attrName) {
+              const value = new TextDecoder().decode(valueObj.value);
+              result.set(attrName, value);
+            }
+          }
+        }
+      }
+    }
+
+    return result;
   }
 }
