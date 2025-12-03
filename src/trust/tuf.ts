@@ -57,6 +57,7 @@ export interface TrustedRootProviderOptions {
  */
 const DEFAULT_CONFIG = {
   metadataUrl: 'https://tuf-repo-cdn.sigstore.dev/',
+  targetBaseUrl: 'https://tuf-repo-cdn.sigstore.dev/targets/',
   namespace: 'sigstore-browser',
   trustedRootTarget: 'trusted_root.json',
   cacheTTL: 3600000, // 1 hour
@@ -89,7 +90,8 @@ export class TrustedRootProvider {
   constructor(options: TrustedRootProviderOptions = {}) {
     const metadataUrl = options.metadataUrl || DEFAULT_CONFIG.metadataUrl;
     this.metadataUrl = metadataUrl.endsWith('/') ? metadataUrl : `${metadataUrl}/`;
-    this.targetBaseUrl = options.targetBaseUrl || this.metadataUrl;
+    const targetBaseUrl = options.targetBaseUrl || DEFAULT_CONFIG.targetBaseUrl;
+    this.targetBaseUrl = targetBaseUrl.endsWith('/') ? targetBaseUrl : `${targetBaseUrl}/`;
     this.initialRoot = options.initialRoot;
     this.namespace = options.namespace || DEFAULT_CONFIG.namespace;
     this.trustedRootTarget = options.trustedRootTarget || DEFAULT_CONFIG.trustedRootTarget;
