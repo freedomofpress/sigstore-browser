@@ -35,7 +35,7 @@ export interface TrustedRootProviderOptions {
 
   /**
    * Namespace for TUF cache storage
-   * Default: 'sigstore-browser'
+   * Default: 'tuf-cache'
    */
   namespace?: string;
 
@@ -50,6 +50,12 @@ export interface TrustedRootProviderOptions {
    * Default: 1 hour (3600000 ms)
    */
   cacheTTL?: number;
+
+  /**
+   * Disable persistent caching (use in-memory only)
+   * Default: false
+   */
+  disableCache?: boolean;
 }
 
 /**
@@ -58,7 +64,7 @@ export interface TrustedRootProviderOptions {
 const DEFAULT_CONFIG = {
   metadataUrl: 'https://tuf-repo-cdn.sigstore.dev/',
   targetBaseUrl: 'https://tuf-repo-cdn.sigstore.dev/targets/',
-  namespace: 'sigstore-browser',
+  namespace: 'tuf-cache',
   trustedRootTarget: 'trusted_root.json',
   cacheTTL: 3600000, // 1 hour
 };
@@ -82,6 +88,7 @@ export class TrustedRootProvider {
   private namespace: string;
   private trustedRootTarget: string;
   private cacheTTL: number;
+  private disableCache: boolean;
 
   private tufClient?: TUFClient;
   private cachedRoot?: TrustedRoot;
@@ -96,6 +103,7 @@ export class TrustedRootProvider {
     this.namespace = options.namespace || DEFAULT_CONFIG.namespace;
     this.trustedRootTarget = options.trustedRootTarget || DEFAULT_CONFIG.trustedRootTarget;
     this.cacheTTL = options.cacheTTL ?? DEFAULT_CONFIG.cacheTTL;
+    this.disableCache = options.disableCache ?? false;
   }
 
   /**
@@ -117,7 +125,8 @@ export class TrustedRootProvider {
         this.metadataUrl,
         rootMetadata,
         this.namespace,
-        this.targetBaseUrl
+        this.targetBaseUrl,
+        { disableCache: this.disableCache }
       );
     } catch (error) {
       throw new Error(
