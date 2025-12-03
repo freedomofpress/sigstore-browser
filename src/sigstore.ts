@@ -35,6 +35,7 @@ import { verifyCheckpoint } from "./tlog/checkpoint.js";
 import { verifyTLogBody } from "./tlog/body.js";
 import { verifyBundleTimestamp } from "./timestamp/tsa.js";
 import { TrustedRootProvider } from "./trust/tuf.js";
+import type { VerificationPolicy } from "./policy.js";
 
 const MEDIA_TYPE_BASE = "application/vnd.dev.sigstore.bundle";
 
@@ -774,5 +775,122 @@ export class SigstoreVerifier {
     }
 
     return true;
+  }
+
+  /**
+   * Verify a DSSE bundle using a verification policy.
+   * This matches sigstore-python's verify_dsse API.
+   *
+   * Reference: https://github.com/sigstore/sigstore-python/blob/main/sigstore/verify/verifier.py#L388
+   *
+   * Unlike verify_artifact which verifies an artifact against a bundle,
+   * this method verifies the DSSE envelope itself and returns the payload.
+   * The caller is responsible for checking that the payload matches their
+   * expected artifact (e.g., by checking subjects in an in-toto statement).
+   *
+   * @param bundle - The Sigstore bundle containing the DSSE envelope
+   * @param policy - A verification policy to apply to the signing certificate
+   * @returns The payload type and payload bytes from the verified envelope
+   */
+  public async verifyDsse(
+    bundle: SigstoreBundle,
+    policy: VerificationPolicy,
+  ): Promise<{ payloadType: string; payload: Uint8Array }> {
+    if (!this.root) {
+      throw new Error("Sigstore root is undefined");
+    }
+
+    if (!bundle.dsseEnvelope) {
+      throw new Error("Bundle does not contain a DSSE envelope");
+    }
+
+    // Extract certificate from bundle
+    const cert = bundle.verificationMaterial.certificate ||
+      bundle.verificationMaterial.x509CertificateChain?.certificates[0];
+
+    if (!cert) {
+      throw new Error("No certificate found in bundle");
+    }
+
+    const signingCert = X509Certificate.parse(base64ToUint8Array(cert.rawBytes));
+
+    // (1) Verify certificate chain to trusted CA
+    const certPath = await this.verifyCertificateChain(
+      signingCert.notBefore,
+      signingCert,
+      this.root.certificateAuthorities
+    );
+
+    // (2) Verify SCTs
+    const issuerCert = certPath.length > 1 ? certPath[1] : certPath[0];
+    const verifiedSCTs = await this.verifySCT(signingCert, issuerCert, this.root.ctlogs);
+    if (verifiedSCTs.length < this.options.ctlogThreshold) {
+      throw new Error(
+        `Not enough valid SCTs: found ${verifiedSCTs.length}, required ${this.options.ctlogThreshold}`
+      );
+    }
+
+    // (3) Verify the signing certificate against the policy
+    policy.verify(signingCert);
+
+    // (4) Verify Rekor inclusion promise
+    if (!(await this.verifyInclusionPromise(signingCert, bundle, this.root.rekor))) {
+      throw new Error("Inclusion promise validation failed");
+    }
+
+    // (5) Verify Rekor inclusion proof (Merkle tree verification)
+    await this.verifyInclusionProof(bundle);
+
+    // Validate envelope has exactly one signature (matches sigstore-python dsse._verify)
+    if (!bundle.dsseEnvelope.signatures || bundle.dsseEnvelope.signatures.length !== 1) {
+      throw new Error(
+        `DSSE envelope must have exactly 1 signature, got ${bundle.dsseEnvelope.signatures?.length ?? 0}`
+      );
+    }
+
+    // (6) TSA Timestamp verification
+    const signature = base64ToUint8Array(bundle.dsseEnvelope.signatures[0].sig);
+    const verifiedTimestamps = await verifyBundleTimestamp(
+      bundle.verificationMaterial.timestampVerificationData,
+      signature,
+      this.rawRoot?.timestampAuthorities || []
+    );
+
+    if (verifiedTimestamps.length < this.options.tsaThreshold) {
+      throw new Error(
+        `Not enough verified TSA timestamps: ${verifiedTimestamps.length} < ${this.options.tsaThreshold}`
+      );
+    }
+
+    for (const verifiedTimestamp of verifiedTimestamps) {
+      if (!signingCert.validForDate(verifiedTimestamp)) {
+        throw new Error("Certificate was not valid at the time of timestamping");
+      }
+    }
+
+    // (7) Verify the DSSE envelope signature
+    const payloadBytes = base64ToUint8Array(bundle.dsseEnvelope.payload);
+    const pae = preAuthEncoding(bundle.dsseEnvelope.payloadType, payloadBytes);
+
+    const publicKey = await signingCert.publicKeyObj;
+    const verified = await verifySignature(publicKey, pae, signature);
+    if (!verified) {
+      throw new Error("DSSE signature verification failed");
+    }
+
+    // (8) Verify the consistency of the log entry's body against the bundle materials
+    // The entry MUST be of type "dsse" for DSSE verification
+    for (const entry of bundle.verificationMaterial.tlogEntries) {
+      if (entry.kindVersion.kind !== "dsse") {
+        throw new Error(`Expected entry type dsse, got ${entry.kindVersion.kind}`);
+      }
+      await verifyTLogBody(entry, bundle);
+    }
+
+    // Return the verified payload
+    return {
+      payloadType: bundle.dsseEnvelope.payloadType,
+      payload: payloadBytes,
+    };
   }
 }
