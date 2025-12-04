@@ -1,6 +1,6 @@
 {
   "name": "@freedomofpress/sigstore-browser",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "A minimal browser-only Sigstore verification library.",
   "repository": {
     "type": "git",
