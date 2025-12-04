@@ -3,8 +3,8 @@
   "version": "0.1.9",
   "description": "A minimal browser-only Sigstore verification library.",
   "repository": {
-      "type": "git",
-      "url": "https://github.com/freedomofpress/sigstore-browser"
+    "type": "git",
+    "url": "https://github.com/freedomofpress/sigstore-browser"
   },
   "main": "dist/index.js",
   "type": "module",
@@ -41,7 +41,7 @@
   },
   "dependencies": {
     "@freedomofpress/crypto-browser": "^0.1.4",
-    "@freedomofpress/tuf-browser": "^0.1.5",
+    "@freedomofpress/tuf-browser": "^0.1.7",
     "@noble/curves": "^2.0.1"
   }
 }
