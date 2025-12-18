@@ -1,6 +1,6 @@
 {
   "name": "@freedomofpress/sigstore-browser",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "A minimal browser-only Sigstore verification library.",
   "repository": {
     "type": "git",
@@ -41,7 +41,7 @@
   },
   "dependencies": {
     "@freedomofpress/crypto-browser": "^0.1.4",
-    "@freedomofpress/tuf-browser": "^0.1.7",
+    "@freedomofpress/tuf-browser": "^0.1.8",
     "@noble/curves": "^2.0.1"
   }
 }
