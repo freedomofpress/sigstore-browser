@@ -603,6 +603,7 @@ export class SigstoreVerifier {
     bundle: SigstoreBundle,
     data: Uint8Array,
     isDigestOnly: boolean = false,
+    policy?: VerificationPolicy,
   ): Promise<boolean> {
     // Quick checks first: does the signing certificate have the correct identity?
 
@@ -643,6 +644,10 @@ export class SigstoreVerifier {
     const certIssuer = signingCert.extFulcioIssuerV2?.issuer || signingCert.extFulcioIssuerV1?.issuer;
     if (certIssuer !== issuer) {
       throw new Error("Identity issuer is not the verifying one.");
+    }
+
+    if (policy) {
+      policy.verify(signingCert);
     }
 
     // # 2 Certificate validity - verify chain to trusted CA
