@@ -49,7 +49,9 @@ const verified = await verifier.verifyArtifact(
   'identity@example.com',           // Expected signer identity (SAN)
   'https://accounts.google.com',    // Expected OIDC issuer
   bundle,
-  artifactData
+  artifactData,
+  false,
+  policy // Optional VerificationPolicy
 );
 ```
 
@@ -76,6 +78,8 @@ The `verifyArtifact` method performs the following checks:
 7. **TLog Body Verification**: Entry body matches bundle content
 8. **TSA Timestamp Verification**: RFC 3161 timestamp verification (if configured)
 9. **Signature Verification**: Artifact signature using certificate's public key
+
+`verifyArtifact` accepts an optional `VerificationPolicy` as the last argument to enforce custom certificate claim checks.
 
 ## Development
 
