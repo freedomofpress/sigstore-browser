@@ -234,14 +234,14 @@ async function importTLogKey(tlog: RawLogs[0]): Promise<CryptoKey> {
   } else if (keyDetails.includes("ECDSA")) {
     keyType = KeyTypes.Ecdsa;
     // Extract the curve and hash, e.g., "P256_SHA_256" from "PKIX_ECDSA_P256_SHA_256"
-    scheme = keyDetails.replace("PKIX_ECDSA_", "").replaceAll("_", "-");
+    scheme = keyDetails.replace("PKIX_ECDSA_", "").replace(/_/g, "-")
   } else if (keyDetails.includes("ED25519")) {
     keyType = KeyTypes.Ed25519;
     scheme = KeyTypes.Ed25519;
   } else if (keyDetails.includes("RSA")) {
     keyType = KeyTypes.RSA;
     // Extract RSA details, e.g., "PSS_SHA_256" from "PKIX_RSA_PSS_SHA_256"
-    scheme = keyDetails.replace("PKIX_RSA_", "").replaceAll("_", "-");
+    scheme = keyDetails.replace("PKIX_RSA_", "").replace(/_/g, "-")
   } else {
     throw new Error(`Unsupported key type in keyDetails: ${keyDetails}`);
   }
