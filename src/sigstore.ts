@@ -36,6 +36,7 @@ import { verifyTLogBody } from "./tlog/body.js";
 import { verifyBundleTimestamp } from "./timestamp/tsa.js";
 import { TrustedRootProvider } from "./trust/tuf.js";
 import type { VerificationPolicy } from "./policy.js";
+import { AnyOf, AllOf, OIDCIssuer, OIDCIssuerV2, Identity } from "./policy.js";
 
 const MEDIA_TYPE_BASE = "application/vnd.dev.sigstore.bundle";
 
@@ -597,13 +598,11 @@ export class SigstoreVerifier {
     }
   }
 
-  public async verifyArtifact(
-    identity: string,
-    issuer: string,
+  public async verifyArtifactPolicy(
+    policy: VerificationPolicy,
     bundle: SigstoreBundle,
     data: Uint8Array,
     isDigestOnly: boolean = false,
-    policy?: VerificationPolicy,
   ): Promise<boolean> {
     // Quick checks first: does the signing certificate have the correct identity?
 
@@ -632,23 +631,8 @@ export class SigstoreVerifier {
     } else {
       throw new Error("Bundle does not contain a message signature or DSSE envelope");
     }
-
-    // # 1 Basic stuff
-    if (signingCert.subjectAltName !== identity) {
-      throw new Error(
-        "Certificate identity (subjectAltName) do not match the verifying one.",
-      );
-    }
-
-    // Check for issuer - try V2 first, fall back to V1 (like sigstore-js does)
-    const certIssuer = signingCert.extFulcioIssuerV2?.issuer || signingCert.extFulcioIssuerV1?.issuer;
-    if (certIssuer !== issuer) {
-      throw new Error("Identity issuer is not the verifying one.");
-    }
-
-    if (policy) {
-      policy.verify(signingCert);
-    }
+    // # 1 Basic stuff: ceritificate policy validation
+    policy.verify(signingCert);
 
     // # 2 Certificate validity - verify chain to trusted CA
     // Similar to sigstore-js key/index.ts:59-64 which calls verifyCertificateChain()
@@ -781,6 +765,32 @@ export class SigstoreVerifier {
 
     return true;
   }
+
+public async verifyArtifact(
+  identity: string,
+  issuer: string,
+  bundle: SigstoreBundle,
+  data: Uint8Array,
+  isDigestOnly: boolean = false,
+): Promise<boolean> {
+
+  const policy = new AllOf([
+    new Identity({ identity }),
+    new AnyOf([
+      new OIDCIssuerV2(issuer),
+      new OIDCIssuer(issuer),
+    ]),
+  ]);
+
+  return this.verifyArtifactPolicy(
+    policy,
+    bundle,
+    data,
+    isDigestOnly,
+  );
+}
+
+    
 
   /**
    * Verify a DSSE bundle using a verification policy.
