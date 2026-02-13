@@ -4,7 +4,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   build: {
     outDir: "dist",
-    target: "esnext",
+    target: "es2020",
     lib: {
       entry: "src/index.ts",
       formats: ["es"],
