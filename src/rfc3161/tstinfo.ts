@@ -60,7 +60,7 @@ export class TSTInfo {
 
     const digest = await crypto.subtle.digest(
       hashAlgName,
-      data as Uint8Array<ArrayBuffer>,
+      data as BufferSource,
     );
     if (
       !uint8ArrayEqual(new Uint8Array(digest), this.messageImprintHashedMessage)
