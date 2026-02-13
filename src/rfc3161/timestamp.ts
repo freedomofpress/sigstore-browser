@@ -121,7 +121,7 @@ export class RFC3161Timestamp {
 
     const tstInfoDigest = await crypto.subtle.digest(
       hashAlgName,
-      this.tstInfo.raw as Uint8Array<ArrayBuffer>,
+      this.tstInfo.raw as BufferSource,
     );
     const expectedDigest = this.messageDigestAttributeObj.subs[1].subs[0].value;
 

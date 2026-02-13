@@ -138,7 +138,7 @@ async function hashChildren(
   data.set(left, RFC6962_NODE_HASH_PREFIX.length);
   data.set(right, RFC6962_NODE_HASH_PREFIX.length + left.length);
 
-  const hash = await crypto.subtle.digest(HashAlgorithms.SHA256, data as Uint8Array<ArrayBuffer>);
+  const hash = await crypto.subtle.digest(HashAlgorithms.SHA256, data as BufferSource);
   return new Uint8Array(hash);
 }
 
@@ -147,6 +147,6 @@ async function hashLeaf(leaf: Uint8Array): Promise<Uint8Array> {
   data.set(RFC6962_LEAF_HASH_PREFIX, 0);
   data.set(leaf, RFC6962_LEAF_HASH_PREFIX.length);
 
-  const hash = await crypto.subtle.digest(HashAlgorithms.SHA256, data as Uint8Array<ArrayBuffer>);
+  const hash = await crypto.subtle.digest(HashAlgorithms.SHA256, data as BufferSource);
   return new Uint8Array(hash);
 }

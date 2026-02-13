@@ -335,7 +335,7 @@ export class SigstoreVerifier {
 
     // Calculate hash of the issuer's public key
     const issuerId = new Uint8Array(
-      await crypto.subtle.digest(HashAlgorithms.SHA256, issuer.publicKey as Uint8Array<ArrayBuffer>),
+      await crypto.subtle.digest(HashAlgorithms.SHA256, issuer.publicKey as BufferSource),
     );
     preCert.appendView(issuerId);
 
@@ -715,7 +715,7 @@ export class SigstoreVerifier {
       } else {
         // data is the file content, compute the digest
         artifactDigest = Uint8ArrayToHex(
-          new Uint8Array(await crypto.subtle.digest(HashAlgorithms.SHA256, data as Uint8Array<ArrayBuffer>))
+          new Uint8Array(await crypto.subtle.digest(HashAlgorithms.SHA256, data as BufferSource))
         );
       }
 

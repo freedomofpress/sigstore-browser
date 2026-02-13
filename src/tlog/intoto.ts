@@ -96,7 +96,7 @@ export async function verifyIntotoBody(
 
     const payloadBytes = base64ToUint8Array(bundle.dsseEnvelope.payload);
     const bundleHashBytes = new Uint8Array(
-      await crypto.subtle.digest(hashAlg, payloadBytes as Uint8Array<ArrayBuffer>)
+      await crypto.subtle.digest(hashAlg, payloadBytes as BufferSource)
     );
 
     if (!uint8ArrayEqual(tlogHashBytes, bundleHashBytes)) {
