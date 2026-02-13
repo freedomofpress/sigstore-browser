@@ -140,10 +140,9 @@ export class TrustedRootProvider {
    * Returns the TUF root.json that bootstraps the TUF client
    */
   private async getDefaultRoot(): Promise<string> {
-    // Import the embedded TUF root metadata (base64-encoded 1.root.json as JSON string)
+    // Import the embedded TUF root metadata (base64-encoded 1.root.json as string)
     // This is the root of trust for TUF, not to be confused with the Sigstore trusted root
-    const tufRootModule = await import('./tuf-root.json', { with: { type: 'json' } });
-    const tufRootBase64 = tufRootModule.default as string;
+    const { default: tufRootBase64 } = await import('./tuf-root.js');
 
     // Decode from base64 to get the actual root.json content
     const decoder = new TextDecoder();
