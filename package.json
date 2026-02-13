@@ -40,7 +40,7 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
-    "@freedomofpress/crypto-browser": "^0.1.4",
+    "@freedomofpress/crypto-browser": "^0.1.7",
     "@freedomofpress/tuf-browser": "^0.1.10",
     "@noble/curves": "^2.0.1"
   }
