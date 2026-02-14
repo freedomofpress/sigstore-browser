@@ -41,7 +41,7 @@
   },
   "dependencies": {
     "@freedomofpress/crypto-browser": "^0.1.7",
-    "@freedomofpress/tuf-browser": "^0.1.10",
+    "@freedomofpress/tuf-browser": "^0.1.11",
     "@noble/curves": "^2.0.1"
   }
 }
