@@ -69,6 +69,20 @@ function getBundleVersion(mediaType: string): string {
   return "0.1";
 }
 
+/**
+ * Rekor v2 entries omit `integratedTime` and MUST carry a signed RFC3161
+ * timestamp instead. Check for actual content, not just presence: an empty
+ * `timestampVerificationData: {}` is truthy, so `if (!timestampVerificationData)`
+ * is bypassable and leaves the cert validity window unanchored in time.
+ */
+export function assertRekorV2Timestamp(
+  timestampData?: { rfc3161Timestamps?: readonly unknown[] },
+): void {
+  if (!timestampData?.rfc3161Timestamps?.length) {
+    throw new Error("Rekor v2 bundles require a timestamp for verification.");
+  }
+}
+
 export interface SigstoreVerifierOptions {
   tlogThreshold?: number;
   ctlogThreshold?: number;
@@ -496,12 +510,11 @@ export class SigstoreVerifier {
         );
       }
     } else {
-      // Rekor v2 bundles (no integratedTime) require a timestamp for verification
-      if (!bundle.verificationMaterial.timestampVerificationData) {
-        throw new Error(
-          "Rekor v2 bundles require a timestamp for verification.",
-        );
-      }
+      // Rekor v2 bundles (no integratedTime) require a signed RFC3161 timestamp.
+      // An empty timestampVerificationData object ({}) must NOT satisfy this.
+      assertRekorV2Timestamp(
+        bundle.verificationMaterial.timestampVerificationData,
+      );
     }
 
     // Verify that the certificate in the log matches the signing certificate
