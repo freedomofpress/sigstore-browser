@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SigstoreVerifier } from "./sigstore.js";
+import { SigstoreVerifier, assertRekorV2Timestamp } from "./sigstore.js";
 import { X509Certificate } from "./x509/cert.js";
 
 describe("Sigstore Browser Integration Tests", () => {
@@ -252,5 +252,39 @@ ewS+2T7Qz4oXaQMidPOjr1Q8WKqaKO4yCtC8cz4qVWi3lNqAcAGtonQMXUiflEWV
     expect(parsed.verificationMaterial).toBeDefined();
     expect(parsed.verificationMaterial.tlogEntries).toBeInstanceOf(Array);
     expect(parsed.verificationMaterial.tlogEntries[0].logIndex).toBe("123");
+  });
+});
+
+describe("Rekor v2 observer-timestamp enforcement", () => {
+  // Regression test: a Rekor-v2-shaped bundle (no integratedTime in the tlog
+  // entry) must carry a signed RFC3161 timestamp. A previous guard only checked
+  // that `timestampVerificationData` was present, which an empty object ({})
+  // satisfies in JavaScript — letting a crafted bundle pass verification with
+  // zero verified timestamps and the signing certificate's validity window left
+  // completely unanchored in time.
+
+  it("rejects a missing timestampVerificationData", () => {
+    expect(() => assertRekorV2Timestamp(undefined)).toThrow(
+      "Rekor v2 bundles require a timestamp for verification.",
+    );
+  });
+
+  it("rejects an empty timestampVerificationData object ({})", () => {
+    // This is the exact bypass the fix closes: {} is truthy.
+    expect(() => assertRekorV2Timestamp({})).toThrow(
+      "Rekor v2 bundles require a timestamp for verification.",
+    );
+  });
+
+  it("rejects timestampVerificationData with an empty rfc3161Timestamps array", () => {
+    expect(() =>
+      assertRekorV2Timestamp({ rfc3161Timestamps: [] }),
+    ).toThrow("Rekor v2 bundles require a timestamp for verification.");
+  });
+
+  it("accepts timestampVerificationData with at least one RFC3161 timestamp", () => {
+    expect(() =>
+      assertRekorV2Timestamp({ rfc3161Timestamps: [{ signedTimestamp: "…" }] }),
+    ).not.toThrow();
   });
 });
