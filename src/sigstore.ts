@@ -896,6 +896,30 @@ public async verifyArtifact(
       }
     }
 
+    // Every tlog entry must be anchored in time by at least one observer
+    // timestamp, matching the observer-timestamp enforcement in the upstream
+    // sigstore-js and sigstore-go clients. A v1 entry carries integratedTime
+    // (the signing certificate must be valid at that instant); a v2 entry omits
+    // it and must instead carry a signed RFC3161 timestamp. Without either, the
+    // certificate's validity window is never anchored — a crafted bundle that
+    // strips integratedTime + the inclusion promise and supplies an empty
+    // timestampVerificationData ({}) would otherwise pass. This mirrors the
+    // guard in verify(), which callers verifying via verifyDsse() would miss.
+    for (const entry of bundle.verificationMaterial.tlogEntries) {
+      if (entry.integratedTime) {
+        const integratedDate = new Date(Number(entry.integratedTime) * 1000);
+        if (!signingCert.validForDate(integratedDate)) {
+          throw new Error(
+            "Artifact signing was logged outside of the certificate validity.",
+          );
+        }
+      } else {
+        assertRekorV2Timestamp(
+          bundle.verificationMaterial.timestampVerificationData,
+        );
+      }
+    }
+
     // (7) Verify the DSSE envelope signature
     const payloadBytes = base64ToUint8Array(bundle.dsseEnvelope.payload);
     const pae = preAuthEncoding(bundle.dsseEnvelope.payloadType, payloadBytes);
