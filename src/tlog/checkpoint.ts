@@ -4,38 +4,25 @@ Checkpoint verification for transparency log entries.
 Adapted from sigstore-js for browser compatibility:
 https://github.com/sigstore/sigstore-js/blob/main/packages/verify/src/timestamp/checkpoint.ts
 
-Key differences:
-- Uses Uint8Array instead of Buffer
-- Uses Web Crypto API instead of Node.js crypto module
-- Manual handling of ED25519 (raw) vs ECDSA (DER) signature formats
-- Inline key import from raw bytes
-
-Additional functionality not in reference:
-- filterTLogsByDate() - inlined from sigstore-js/packages/verify/src/trust/filter.ts
-- importTLogKey() - new browser-compatible key import with multiple format support
-- Special handling for Rekor v2 bundles without integratedTime
-
 Follows the signed note format specification:
 https://github.com/transparency-dev/formats/blob/main/log/README.md
 */
 
 import {
   base64ToUint8Array,
-  importKey,
-  KeyTypes,
   stringToUint8Array,
   uint8ArrayEqual,
   verifySignature,
 } from "@freedomofpress/crypto-browser";
 import type { TLogEntry } from "../bundle.js";
-import type { RawLogs } from "../interfaces.js";
+import type { RekorKeyInfo } from "../interfaces.js";
 
 // Signed note format per https://github.com/transparency-dev/formats
 // Body is separated from signatures by a blank line
 const CHECKPOINT_SEPARATOR = "\n\n";
 // Signature lines format: "— <identity> <base64(key_hint+signature)>\n"
-// \u2014 is the em-dash character (—)
-const SIGNATURE_REGEX = /\u2014 (\S+) (\S+)\n/g;
+// — is the em-dash character (—)
+const SIGNATURE_REGEX = /— (\S+) (\S+)\n/g;
 
 export interface TLogSignature {
   name: string;
@@ -126,129 +113,38 @@ export class LogCheckpoint {
   }
 }
 
-// Verifies checkpoint signature and ensures root hash matches inclusion proof
+// Verifies that the checkpoint is signed by the entry's log and describes the same tree as the inclusion proof.
 export async function verifyCheckpoint(
   entry: TLogEntry,
-  tlogs: RawLogs
+  log: RekorKeyInfo
 ): Promise<void> {
-  if (!entry.inclusionProof?.checkpoint) {
+  const proof = entry.inclusionProof;
+  if (!proof?.checkpoint?.envelope) {
     throw new Error("Missing checkpoint in inclusion proof");
   }
 
-  // Filter by log ID first (matches entry's log ID)
-  const entryLogId = base64ToUint8Array(entry.logId.keyId);
-  const matchingTLogs = tlogs.filter((tlog) => {
-    const tlogId = base64ToUint8Array(tlog.logId.keyId);
-    return uint8ArrayEqual(tlogId, entryLogId);
-  });
-
-  // Then filter by date if integratedTime is available
-  // For Rekor v2 bundles, integratedTime may be null, so we skip date filtering
-  const validTLogs = entry.integratedTime
-    ? filterTLogsByDate(matchingTLogs, new Date(Number(entry.integratedTime) * 1000))
-    : matchingTLogs;
-
-  const inclusionProof = entry.inclusionProof;
-  const signedNote = SignedNote.fromString(inclusionProof.checkpoint.envelope);
+  const signedNote = SignedNote.fromString(proof.checkpoint.envelope);
   const checkpoint = LogCheckpoint.fromString(signedNote.note);
+  const data = stringToUint8Array(signedNote.note);
 
-  if (!(await verifySignedNote(signedNote, validTLogs))) {
+  // Signatures from other parties (e.g. witnesses) are ignored; the key hint is the first 4 bytes of the log ID.
+  let valid = false;
+  for (const sig of signedNote.signatures) {
+    if (
+      uint8ArrayEqual(sig.keyHint, log.logId.subarray(0, 4)) &&
+      (await verifySignature(log.publicKey, data, sig.signature, log.hashAlgorithm))
+    ) {
+      valid = true;
+    }
+  }
+  if (!valid) {
     throw new Error("Invalid checkpoint signature");
   }
 
-  const rootHash = base64ToUint8Array(inclusionProof.rootHash);
-  if (!uint8ArrayEqual(checkpoint.logHash, rootHash)) {
-    throw new Error("Root hash mismatch between checkpoint and inclusion proof");
+  if (
+    checkpoint.logSize !== BigInt(proof.treeSize) ||
+    !uint8ArrayEqual(checkpoint.logHash, base64ToUint8Array(proof.rootHash))
+  ) {
+    throw new Error("Checkpoint does not match inclusion proof");
   }
-}
-
-// Verifies checkpoint signatures using trusted TLog keys
-async function verifySignedNote(
-  signedNote: SignedNote,
-  tlogs: RawLogs
-): Promise<boolean> {
-  const data = stringToUint8Array(signedNote.note);
-
-  // We need at least one valid signature from a known TLog
-  let hasValidSignature = false;
-
-  for (const signature of signedNote.signatures) {
-    // Match signature to TLog using key hint (first 4 bytes of key ID)
-    const tlog = tlogs.find((tlog) => {
-      const logId = base64ToUint8Array(tlog.logId.keyId);
-      return uint8ArrayEqual(logId.subarray(0, 4), signature.keyHint);
-    });
-
-    if (!tlog) {
-      // Skip unknown signatures (e.g., from witnesses we don't know about)
-      continue;
-    }
-
-    const publicKey = await importTLogKey(tlog);
-
-    // Both ED25519 and ECDSA verification are now handled by verifySignature
-    // ED25519 signatures are raw (64 bytes), ECDSA signatures are DER-encoded
-    const verified = await verifySignature(
-      publicKey,
-      data,
-      signature.signature,
-      tlog.hashAlgorithm
-    );
-
-    if (verified) {
-      hasValidSignature = true;
-    }
-  }
-
-  return hasValidSignature;
-}
-
-
-// Inlined from sigstore-js/packages/verify/src/trust/filter.ts
-function filterTLogsByDate(tlogs: RawLogs, targetDate: Date): RawLogs {
-  return tlogs.filter((tlog) => {
-    const start = new Date(tlog.publicKey.validFor.start);
-    const end = tlog.publicKey.validFor.end
-      ? new Date(tlog.publicKey.validFor.end)
-      : null;
-
-    return targetDate >= start && (!end || targetDate <= end);
-  });
-}
-
-// Browser-compatible key import supporting multiple formats (not in sigstore-js reference)
-async function importTLogKey(tlog: RawLogs[0]): Promise<CryptoKey> {
-  // Parse keyDetails to extract key type and scheme
-  // Formats can be:
-  // - "PKIX_ECDSA_P256_SHA_256" (production format)
-  // - "PKIX_ED25519"
-  // - "ecdsa-sha2-nistp256" (SSH/test format)
-  const keyDetails = tlog.publicKey.keyDetails;
-  let keyType: string;
-  let scheme: string;
-
-  if (keyDetails === "ecdsa-sha2-nistp256") {
-    // SSH-style ECDSA P-256 format used in tests
-    keyType = KeyTypes.Ecdsa;
-    scheme = "P256-SHA256";
-  } else if (keyDetails.includes("ECDSA")) {
-    keyType = KeyTypes.Ecdsa;
-    // Extract the curve and hash, e.g., "P256_SHA_256" from "PKIX_ECDSA_P256_SHA_256"
-    scheme = keyDetails.replace("PKIX_ECDSA_", "").replace(/_/g, "-")
-  } else if (keyDetails.includes("ED25519")) {
-    keyType = KeyTypes.Ed25519;
-    scheme = KeyTypes.Ed25519;
-  } else if (keyDetails.includes("RSA")) {
-    keyType = KeyTypes.RSA;
-    // Extract RSA details, e.g., "PSS_SHA_256" from "PKIX_RSA_PSS_SHA_256"
-    scheme = keyDetails.replace("PKIX_RSA_", "").replace(/_/g, "-")
-  } else {
-    throw new Error(`Unsupported key type in keyDetails: ${keyDetails}`);
-  }
-
-  return importKey(
-    keyType,
-    scheme,
-    tlog.publicKey.rawBytes
-  );
 }

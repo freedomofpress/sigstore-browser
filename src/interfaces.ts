@@ -45,6 +45,7 @@ export interface CTLog {
 export interface RekorKeyInfo {
   publicKey: CryptoKey;
   logId: Uint8Array;
+  hashAlgorithm: string;
 }
 
 export interface CertAuthority {
@@ -56,7 +57,7 @@ export interface CertAuthority {
 }
 
 export interface Sigstore {
-  rekor: RekorKeyInfo | undefined;
+  rekor: RekorKeyInfo[];
   ctlogs: CTLog[];
   certificateAuthorities: CertAuthority[];
   timestampAuthorities: CertAuthority[];
