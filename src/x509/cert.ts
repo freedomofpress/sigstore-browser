@@ -17,10 +17,11 @@ import {
   ASN1Obj,
   importKey,
   toDER,
-  Uint8ArrayToBase64,
   uint8ArrayEqual,
+  Uint8ArrayToBase64,
   verifySignature,
 } from "@freedomofpress/crypto-browser";
+
 import { parseDER } from "../asn1.js";
 import { KeyTypes } from "../interfaces.js";
 import { DEFAULT_HASH_ALGORITHM, ECDSA_CURVE_NAMES, ECDSA_SIGNATURE_ALGOS, OID_RSASSA_PSS, RSA_SIGNATURE_ALGOS, SHA2_HASH_ALGOS } from "../oid.js";

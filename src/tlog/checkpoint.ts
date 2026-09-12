@@ -14,6 +14,7 @@ import {
   uint8ArrayEqual,
   verifySignature,
 } from "@freedomofpress/crypto-browser";
+
 import type { TLogEntry } from "../bundle.js";
 import type { RekorKeyInfo } from "../interfaces.js";
 

@@ -59,7 +59,7 @@ const verified = await verifier.verifyArtifact(
 
 ```typescript
 const verifier = new SigstoreVerifier({
-  tlogThreshold: 1,   // Minimum transparency log entries required (default: 1)
+  tlogThreshold: 1,   // Minimum distinct transparency logs with a fully verified entry (default: 1)
   ctlogThreshold: 1,  // Minimum SCTs required (default: 1)
   tsaThreshold: 0,    // Minimum TSA timestamps required (default: 0)
 });
@@ -69,15 +69,15 @@ const verifier = new SigstoreVerifier({
 
 The `verifyArtifact` method performs the following checks:
 
-1. **Identity Verification**: Certificate SAN matches the expected identity
-2. **Issuer Verification**: Certificate OIDC issuer matches the expected issuer
-3. **Certificate Chain**: Leaf certificate chains to a trusted Fulcio CA
-4. **SCT Verification**: Signed Certificate Timestamps from CT logs
-5. **Inclusion Promise/Proof**: Rekor transparency log inclusion
-6. **Merkle Tree Verification**: Inclusion proof validation (for v0.2+ bundles)
-7. **TLog Body Verification**: Entry body matches bundle content
-8. **TSA Timestamp Verification**: RFC 3161 timestamp verification (if configured)
-9. **Signature Verification**: Artifact signature using certificate's public key
+1. **Bundle Validation**: Structural validation and a known bundle media type
+2. **Identity Verification**: Certificate SAN matches the expected identity
+3. **Issuer Verification**: Certificate OIDC issuer matches the expected issuer
+4. **Transparency Log**: Every entry from a trusted Rekor log is verified (inclusion promise, Merkle inclusion proof, checkpoint, body and logged certificate); the threshold counts distinct verified logs
+5. **TSA Timestamp Verification**: RFC 3161 timestamp verification (if present)
+6. **Observer Timestamps**: At least one verified integrated time or TSA timestamp must anchor the signature
+7. **Certificate Chain**: Leaf certificate chains to a Fulcio CA that was trusted at every observer timestamp
+8. **SCT Verification**: Signed Certificate Timestamps from CT logs
+9. **Signature Verification**: Artifact digest and signature using the certificate's public key
 
 `verifyArtifact` accepts an optional `VerificationPolicy` as the last argument to enforce custom certificate claim checks.
 

@@ -10,15 +10,10 @@ import {
   verifySignature,
   verifySignatureOverDigest,
 } from "@freedomofpress/crypto-browser";
-import { HashAlgorithms, KeyTypes } from "./interfaces.js";
-import {
-  CertificateChainVerifier,
-  EXTENSION_OID_SCT,
-  X509Certificate,
-  X509SCTExtension,
-} from "./x509/index.js";
+
 import { assertBundle, type SigstoreBundle, type TLogEntry } from "./bundle.js";
 import { preAuthEncoding } from "./dsse.js";
+import { HashAlgorithms, KeyTypes } from "./interfaces.js";
 import {
   CertAuthority,
   CTLog,
@@ -30,13 +25,19 @@ import {
   SigstoreRoots,
   TrustedRoot,
 } from "./interfaces.js";
-import { verifyMerkleInclusion } from "./tlog/merkle.js";
-import { verifyCheckpoint } from "./tlog/checkpoint.js";
-import { verifyTLogBody } from "./tlog/body.js";
-import { verifyBundleTimestamp } from "./timestamp/tsa.js";
-import { TrustedRootProvider } from "./trust/tuf.js";
 import type { VerificationPolicy } from "./policy.js";
-import { AnyOf, AllOf, OIDCIssuer, OIDCIssuerV2, Identity } from "./policy.js";
+import { AllOf, AnyOf, Identity,OIDCIssuer, OIDCIssuerV2 } from "./policy.js";
+import { verifyBundleTimestamp } from "./timestamp/tsa.js";
+import { verifyTLogBody } from "./tlog/body.js";
+import { verifyCheckpoint } from "./tlog/checkpoint.js";
+import { verifyMerkleInclusion } from "./tlog/merkle.js";
+import { TrustedRootProvider } from "./trust/tuf.js";
+import {
+  CertificateChainVerifier,
+  EXTENSION_OID_SCT,
+  X509Certificate,
+  X509SCTExtension,
+} from "./x509/index.js";
 
 // Upper bound on log entries per bundle, matching sigstore-go's MaxAllowedTlogEntries.
 const MAX_TLOG_ENTRIES = 32;
@@ -134,7 +135,7 @@ export class SigstoreVerifier {
     leaf: X509Certificate,
     certificateAuthorities: CertAuthority[]
   ): Promise<X509Certificate[]> {
-    let lastError: any;
+    let lastError: unknown;
 
     for (const ca of certificateAuthorities) {
       // Check if this CA is valid for the given timestamp
@@ -154,7 +155,9 @@ export class SigstoreVerifier {
       }
     }
 
-    throw new Error(`Failed to verify certificate chain: ${lastError?.message || 'No valid CAs found'}`);
+    throw new Error(
+      `Failed to verify certificate chain: ${lastError instanceof Error ? lastError.message : "No valid CAs found"}`,
+    );
   }
 
   // Loads every Fulcio CA; verifyCertificateChain() selects CAs by the observer timestamp.
@@ -276,7 +279,7 @@ export class SigstoreVerifier {
   }
 
   // Verifies the signed entry timestamp and returns the integrated time it binds.
-  private async verifySET(entry: TLogEntry, log: RekorKeyInfo): Promise<Date> {
+  private async verifySET(entry: TLogEntry, promise: string, log: RekorKeyInfo): Promise<Date> {
     const integratedTime = Number(entry.integratedTime);
     const signed = stringToUint8Array(
       canonicalize({
@@ -286,7 +289,7 @@ export class SigstoreVerifier {
         logID: Uint8ArrayToHex(log.logId),
       }),
     );
-    const signature = base64ToUint8Array(entry.inclusionPromise!.signedEntryTimestamp);
+    const signature = base64ToUint8Array(promise);
     if (!(await verifySignature(log.publicKey, signed, signature, log.hashAlgorithm))) {
       throw new Error("Failed to verify the inclusion promise in the provided bundle.");
     }
@@ -295,7 +298,11 @@ export class SigstoreVerifier {
 
   // Fully verifies every entry from a known log and returns the SET-bound integrated times.
   // Entries from unknown logs are ignored; the threshold counts distinct logs that verified.
-  private async verifyTlogEntries(cert: X509Certificate, bundle: SigstoreBundle): Promise<Date[]> {
+  private async verifyTlogEntries(
+    cert: X509Certificate,
+    bundle: SigstoreBundle,
+    rekor: RekorKeyInfo[],
+  ): Promise<Date[]> {
     const entries = bundle.verificationMaterial.tlogEntries;
     if (entries.length > MAX_TLOG_ENTRIES) {
       throw new Error(`Too many tlog entries: ${entries.length} > ${MAX_TLOG_ENTRIES}`);
@@ -307,15 +314,15 @@ export class SigstoreVerifier {
 
     for (const entry of entries) {
       const logId = base64ToUint8Array(entry.logId.keyId);
-      const log = this.root!.rekor.find((l) => uint8ArrayEqual(l.logId, logId));
+      const log = rekor.find((l) => uint8ArrayEqual(l.logId, logId));
       if (!log) continue;
 
-      const hasPromise = entry.inclusionPromise !== undefined;
-      if (!entry.inclusionProof && (requireProof || !hasPromise)) {
+      const promise = entry.inclusionPromise?.signedEntryTimestamp;
+      if (!entry.inclusionProof && (requireProof || !promise)) {
         throw new Error("Transparency log entry requires an inclusion proof.");
       }
-      if (hasPromise) {
-        integratedTimes.push(await this.verifySET(entry, log));
+      if (promise) {
+        integratedTimes.push(await this.verifySET(entry, promise, log));
       }
       if (entry.inclusionProof) {
         await verifyMerkleInclusion(entry);
@@ -355,7 +362,7 @@ export class SigstoreVerifier {
 
     // Observer timestamps come from SET-bound integrated times and verified RFC 3161 timestamps.
     // Rekor v2 entries carry no integrated time, so they need a TSA timestamp to be anchored at all.
-    const integratedTimes = await this.verifyTlogEntries(signingCert, bundle);
+    const integratedTimes = await this.verifyTlogEntries(signingCert, bundle, this.root.rekor);
     const tsaTimes = await verifyBundleTimestamp(
       bundle.verificationMaterial.timestampVerificationData,
       signature,

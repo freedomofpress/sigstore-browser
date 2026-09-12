@@ -6,10 +6,11 @@
  */
 
 import { base64Decode, base64ToUint8Array, Uint8ArrayToString } from "@freedomofpress/crypto-browser";
+
 import type { SigstoreBundle, TLogEntry } from "../bundle.js";
 import { X509Certificate } from "../x509/cert.js";
-import { verifyHashedRekordBody } from "./hashedrekord.js";
 import { verifyDSSEBody } from "./dsse.js";
+import { verifyHashedRekordBody } from "./hashedrekord.js";
 import { verifyIntotoBody } from "./intoto.js";
 
 export interface RekorEntry {

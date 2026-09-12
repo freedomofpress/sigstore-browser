@@ -7,8 +7,9 @@
  */
 
 import { base64ToUint8Array, hexToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
-import { getHashAlgorithm } from "../interfaces.js";
+
 import type { SigstoreBundle } from "../bundle.js";
+import { getHashAlgorithm } from "../interfaces.js";
 import type { X509Certificate } from "../x509/cert.js";
 import { assertLoggedCertificate, type RekorEntry } from "./body.js";
 

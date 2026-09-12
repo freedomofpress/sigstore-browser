@@ -1,7 +1,8 @@
-import { describe, it, expect } from "vitest";
-import { SigstoreVerifier } from "./sigstore.js";
-import { assertBundle } from "./bundle.js";
+import { describe, expect,it } from "vitest";
+
 import { parseDER } from "./asn1.js";
+import { assertBundle } from "./bundle.js";
+import { SigstoreVerifier } from "./sigstore.js";
 import { X509Certificate } from "./x509/cert.js";
 
 describe("Sigstore Browser Integration Tests", () => {
@@ -283,12 +284,13 @@ describe("Bundle structural validation", () => {
   });
 
   it("rejects numeric logIndex and integratedTime", () => {
-    const b: any = bundle();
-    b.verificationMaterial.tlogEntries[0].logIndex = 1;
+    const b = bundle();
+    const e = b.verificationMaterial.tlogEntries[0] as Record<string, unknown>;
+    e.logIndex = 1;
     expect(() => assertBundle(b)).toThrow("tlog entry");
-    const c: any = bundle();
-    c.verificationMaterial.tlogEntries[0].integratedTime = 1;
-    expect(() => assertBundle(c)).toThrow("integratedTime");
+    e.logIndex = "1";
+    e.integratedTime = 1;
+    expect(() => assertBundle(b)).toThrow("integratedTime");
   });
 
   it("rejects an empty inclusion promise", () => {
@@ -298,12 +300,12 @@ describe("Bundle structural validation", () => {
   });
 
   it("rejects both or neither of messageSignature and dsseEnvelope", () => {
-    const b: any = bundle();
+    const b = bundle() as Record<string, unknown>;
     b.messageSignature = { messageDigest: { algorithm: "SHA2_256", digest: "AA==" }, signature: "AA==" };
     expect(() => assertBundle(b)).toThrow("exactly one");
-    const c: any = bundle();
-    delete c.dsseEnvelope;
-    expect(() => assertBundle(c)).toThrow("exactly one");
+    delete b.messageSignature;
+    delete b.dsseEnvelope;
+    expect(() => assertBundle(b)).toThrow("exactly one");
   });
 
   it("rejects a DSSE envelope without exactly one signature", () => {

@@ -100,7 +100,7 @@ export interface RawCA {
 export type RawCAs = RawCA[];
 
 // Re-export crypto enums from crypto-browser (shared with tuf-browser)
-export { KeyTypes, EcdsaTypes, HashAlgorithms } from "@freedomofpress/crypto-browser";
+export { EcdsaTypes, HashAlgorithms,KeyTypes } from "@freedomofpress/crypto-browser";
 import { HashAlgorithms } from "@freedomofpress/crypto-browser";
 
 // Supported hash algorithms for payload hash validation

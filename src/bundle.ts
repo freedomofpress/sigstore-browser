@@ -100,6 +100,7 @@ export interface InTotoSubject {
 
 const isStr = (v: unknown): v is string => typeof v === "string";
 const isDigits = (v: unknown): boolean => isStr(v) && /^\d+$/.test(v);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const isObj = (v: unknown): v is Record<string, any> => typeof v === "object" && v !== null;
 
 function check(cond: unknown, what: string): asserts cond {
