@@ -3,145 +3,95 @@
  *
  * Based on sigstore-js:
  * https://github.com/sigstore/sigstore-js/blob/main/packages/verify/src/tlog/dsse.ts
- *
- * Key differences from sigstore-js:
- * - Browser-compatible: uses Uint8Array instead of Buffer for binary data
- * - Direct bundle field comparison instead of SignatureContent abstraction
- * - Uses crypto.subtle.digest for hash computation instead of Node.js crypto
- * - Adds verifyDSSE002Body() - new functionality (reference only supports v0.0.1)
+ * Adds v0.0.2 (Rekor v2) support, which the reference lacks.
  */
 
 import { base64ToUint8Array, hexToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
 import { getHashAlgorithm } from "../interfaces.js";
 import type { SigstoreBundle } from "../bundle.js";
-import type { RekorEntry } from "./body.js";
+import type { X509Certificate } from "../x509/cert.js";
+import { assertLoggedCertificate, type RekorEntry } from "./body.js";
 
 interface DSSESpec {
   signatures?: Array<{
     signature: string;
     verifier?: string;
-    keyid?: string;
   }>;
   payloadHash?: {
     algorithm: string;
     value: string;
   };
-  envelopeHash?: {
-    algorithm: string;
-    value: string;
+}
+
+interface DSSEV002Spec {
+  dsseV002?: {
+    signatures?: Array<{
+      content: string;
+      verifier?: { x509Certificate?: { rawBytes: string } };
+    }>;
+    payloadHash?: {
+      algorithm: string;
+      digest: string;
+    };
   };
 }
 
 interface DSSEEntry extends RekorEntry {
   apiVersion: "0.0.1" | "0.0.2";
   kind: "dsse";
-  spec: DSSESpec;
+  spec: DSSESpec | DSSEV002Spec;
 }
 
 export async function verifyDSSEBody(
   entry: RekorEntry,
-  bundle: SigstoreBundle
+  bundle: SigstoreBundle,
+  cert: X509Certificate,
 ): Promise<void> {
   const dsseEntry = entry as DSSEEntry;
-
-  switch (dsseEntry.apiVersion) {
-    case "0.0.1":
-      return verifyDSSE001Body(dsseEntry, bundle);
-    case "0.0.2":
-      return verifyDSSE002Body(dsseEntry, bundle);
-    default:
-      throw new Error(
-        `Unsupported dsse version: ${dsseEntry.apiVersion}`
-      );
-  }
-}
-
-async function verifyDSSE001Body(
-  entry: DSSEEntry,
-  bundle: SigstoreBundle
-): Promise<void> {
   if (!bundle.dsseEnvelope) {
     throw new Error("Bundle missing dsseEnvelope for DSSE entry");
   }
 
-  if (!entry.spec.signatures || entry.spec.signatures.length !== 1) {
-    throw new Error("DSSE entry must have exactly one signature");
+  // v0.0.1 stores the payload hash as hex and the certificate as base64 PEM; v0.0.2 uses base64 DER for both.
+  let tlogSig: Uint8Array, tlogHash: Uint8Array, algorithm: string | undefined;
+  switch (dsseEntry.apiVersion) {
+    case "0.0.1": {
+      const spec = dsseEntry.spec as DSSESpec;
+      if (spec.signatures?.length !== 1) {
+        throw new Error("DSSE entry must have exactly one signature");
+      }
+      tlogSig = base64ToUint8Array(spec.signatures[0].signature || "");
+      tlogHash = hexToUint8Array(spec.payloadHash?.value || "");
+      algorithm = spec.payloadHash?.algorithm;
+      assertLoggedCertificate(cert, spec.signatures[0].verifier, true);
+      break;
+    }
+    case "0.0.2": {
+      const spec = (dsseEntry.spec as DSSEV002Spec).dsseV002;
+      if (spec?.signatures?.length !== 1) {
+        throw new Error("DSSE entry must have exactly one signature");
+      }
+      tlogSig = base64ToUint8Array(spec.signatures[0].content || "");
+      tlogHash = base64ToUint8Array(spec.payloadHash?.digest || "");
+      algorithm = spec.payloadHash?.algorithm;
+      assertLoggedCertificate(cert, spec.signatures[0].verifier?.x509Certificate?.rawBytes, false);
+      break;
+    }
+    default:
+      throw new Error(`Unsupported dsse version: ${dsseEntry.apiVersion}`);
   }
 
-  const tlogSig = entry.spec.signatures[0].signature;
-  const tlogSigBytes = base64ToUint8Array(tlogSig);
-
-  if (bundle.dsseEnvelope.signatures.length === 0) {
-    throw new Error("Bundle DSSE envelope missing signatures");
-  }
-
-  const bundleSigBytes = base64ToUint8Array(bundle.dsseEnvelope.signatures[0].sig);
-
-  if (!uint8ArrayEqual(tlogSigBytes, bundleSigBytes)) {
-    throw new Error("DSSE signature mismatch between TLog entry and bundle");
-  }
-
-  if (!entry.spec.payloadHash?.value || !entry.spec.payloadHash?.algorithm) {
+  if (!algorithm) {
     throw new Error("DSSE entry missing payloadHash or algorithm");
   }
-
-  const hashAlg = getHashAlgorithm(entry.spec.payloadHash.algorithm);
-  const tlogHashBytes = hexToUint8Array(entry.spec.payloadHash.value);
-
+  if (!uint8ArrayEqual(tlogSig, base64ToUint8Array(bundle.dsseEnvelope.signatures[0].sig))) {
+    throw new Error("DSSE signature mismatch between TLog entry and bundle");
+  }
   const payloadBytes = base64ToUint8Array(bundle.dsseEnvelope.payload);
-  const bundleHashBytes = new Uint8Array(
-    await crypto.subtle.digest(hashAlg, payloadBytes as BufferSource)
+  const bundleHash = new Uint8Array(
+    await crypto.subtle.digest(getHashAlgorithm(algorithm), payloadBytes as BufferSource),
   );
-
-  if (!uint8ArrayEqual(tlogHashBytes, bundleHashBytes)) {
+  if (!uint8ArrayEqual(tlogHash, bundleHash)) {
     throw new Error("DSSE payload hash mismatch between TLog entry and bundle");
-  }
-}
-
-// New functionality for DSSE v0.0.2 (not in sigstore-js reference, which only supports v0.0.1)
-async function verifyDSSE002Body(
-  entry: DSSEEntry,
-  bundle: SigstoreBundle
-): Promise<void> {
-  if (!bundle.dsseEnvelope) {
-    throw new Error("Bundle missing dsseEnvelope for DSSE v0.0.2 entry");
-  }
-
-  const spec = (entry.spec as any).dsseV002;
-  if (!spec) {
-    throw new Error("DSSE v0.0.2 entry missing dsseV002 spec");
-  }
-
-  if (!spec.signatures || spec.signatures.length !== 1) {
-    throw new Error("DSSE v0.0.2 entry must have exactly one signature");
-  }
-
-  const tlogSig = spec.signatures[0].content;
-  const tlogSigBytes = base64ToUint8Array(tlogSig);
-
-  if (bundle.dsseEnvelope.signatures.length === 0) {
-    throw new Error("Bundle DSSE envelope missing signatures");
-  }
-
-  const bundleSigBytes = base64ToUint8Array(bundle.dsseEnvelope.signatures[0].sig);
-
-  if (!uint8ArrayEqual(tlogSigBytes, bundleSigBytes)) {
-    throw new Error("DSSE signature mismatch between TLog entry and bundle (v0.0.2)");
-  }
-
-  if (!spec.payloadHash?.digest || !spec.payloadHash?.algorithm) {
-    throw new Error("DSSE v0.0.2 entry missing payloadHash or algorithm");
-  }
-
-  const hashAlg = getHashAlgorithm(spec.payloadHash.algorithm);
-  const tlogHashBytes = base64ToUint8Array(spec.payloadHash.digest);
-
-  const payloadBytes = base64ToUint8Array(bundle.dsseEnvelope.payload);
-  const bundleHashBytes = new Uint8Array(
-    await crypto.subtle.digest(hashAlg, payloadBytes as BufferSource)
-  );
-
-  if (!uint8ArrayEqual(tlogHashBytes, bundleHashBytes)) {
-    throw new Error("DSSE payload hash mismatch between TLog entry and bundle (v0.0.2)");
   }
 }

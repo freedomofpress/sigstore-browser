@@ -13,7 +13,8 @@
 import { base64Decode, base64ToUint8Array, hexToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
 import { getHashAlgorithm } from "../interfaces.js";
 import type { SigstoreBundle } from "../bundle.js";
-import type { RekorEntry } from "./body.js";
+import type { X509Certificate } from "../x509/cert.js";
+import { assertLoggedCertificate, type RekorEntry } from "./body.js";
 
 interface IntotoEnvelope {
   payload: string;
@@ -48,7 +49,8 @@ interface IntotoEntry extends RekorEntry {
 
 export async function verifyIntotoBody(
   entry: RekorEntry,
-  bundle: SigstoreBundle
+  bundle: SigstoreBundle,
+  cert: X509Certificate,
 ): Promise<void> {
   const intotoEntry = entry as IntotoEntry;
 
@@ -76,9 +78,7 @@ export async function verifyIntotoBody(
   const tlogSigDecoded = base64Decode(tlogSigBase64); // First decode: base64 -> UTF-8 string (which contains base64)
   const tlogSigBytes = base64ToUint8Array(tlogSigDecoded); // Second decode: base64 string -> raw bytes
 
-  if (bundle.dsseEnvelope.signatures.length === 0) {
-    throw new Error("Bundle DSSE envelope missing signatures");
-  }
+  assertLoggedCertificate(cert, tlogEnvelope.signatures[0].publicKey, true);
 
   const bundleSigBytes = base64ToUint8Array(bundle.dsseEnvelope.signatures[0].sig);
 
@@ -86,6 +86,7 @@ export async function verifyIntotoBody(
     throw new Error("Intoto signature mismatch between TLog entry and bundle");
   }
 
+  // The payload hash is optional in the schema, so only check it when present.
   if (intotoEntry.spec.content.payloadHash) {
     if (!intotoEntry.spec.content.payloadHash.algorithm) {
       throw new Error("Intoto entry missing payloadHash algorithm");

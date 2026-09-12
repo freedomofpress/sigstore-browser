@@ -97,22 +97,6 @@ function bundleSignature(bundle: SigstoreBundle): Uint8Array {
   return base64ToUint8Array(sigs[0].sig);
 }
 
-// Compares the certificate recorded in the log entry body with the signing certificate.
-function verifyLoggedCertificate(cert: X509Certificate, entry: TLogEntry): void {
-  const spec = JSON.parse(Uint8ArrayToString(base64ToUint8Array(entry.canonicalizedBody))).spec ?? {};
-  let logged: X509Certificate | undefined;
-  const der = spec.hashedRekordV002?.signature?.verifier?.x509Certificate?.rawBytes;
-  const pem = spec.signature?.publicKey?.content ?? spec.signatures?.[0]?.verifier ?? spec.content?.envelope?.signatures?.[0]?.publicKey;
-  if (der) {
-    logged = X509Certificate.parse(base64ToUint8Array(der));
-  } else if (pem) {
-    logged = X509Certificate.parse(Uint8ArrayToString(base64ToUint8Array(pem)));
-  }
-  if (logged && !cert.equals(logged)) {
-    throw new Error("Certificate in Rekor log does not match the signing certificate.");
-  }
-}
-
 export interface SigstoreVerifierOptions {
   tlogThreshold?: number;
   ctlogThreshold?: number;
@@ -434,8 +418,7 @@ export class SigstoreVerifier {
       } else {
         assertRekorV2Timestamp(bundle.verificationMaterial.timestampVerificationData);
       }
-      verifyLoggedCertificate(cert, entry);
-      await verifyTLogBody(entry, bundle);
+      await verifyTLogBody(entry, bundle, cert);
       verifiedLogs.add(Uint8ArrayToHex(logId));
     }
 

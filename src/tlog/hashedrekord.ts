@@ -3,16 +3,13 @@
  *
  * Based on sigstore-js:
  * https://github.com/sigstore/sigstore-js/blob/main/packages/verify/src/tlog/hashedrekord.ts
- *
- * Key differences from sigstore-js:
- * - Browser-compatible: uses Uint8Array instead of Buffer for binary data
- * - Direct bundle field comparison instead of SignatureContent abstraction
- * - Adds verifyHashedRekordV002Body() - new functionality (reference only supports v0.0.1)
+ * Adds v0.0.2 (Rekor v2) support, which the reference lacks.
  */
 
 import { base64ToUint8Array, hexToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
 import type { SigstoreBundle } from "../bundle.js";
-import type { RekorEntry } from "./body.js";
+import type { X509Certificate } from "../x509/cert.js";
+import { assertLoggedCertificate, type RekorEntry } from "./body.js";
 
 interface HashedRekordSpec {
   signature: {
@@ -27,12 +24,6 @@ interface HashedRekordSpec {
       value: string;
     };
   };
-}
-
-interface HashedRekordEntry extends RekorEntry {
-  apiVersion: "0.0.1" | "0.0.2";
-  kind: "hashedrekord";
-  spec: HashedRekordSpec | HashedRekordV002Spec;
 }
 
 interface HashedRekordV002Spec {
@@ -52,79 +43,49 @@ interface HashedRekordV002Spec {
   };
 }
 
-export async function verifyHashedRekordBody(
-  entry: RekorEntry,
-  bundle: SigstoreBundle
-): Promise<void> {
-  const hashedRekordEntry = entry as HashedRekordEntry;
-
-  switch (hashedRekordEntry.apiVersion) {
-    case "0.0.1":
-      return verifyHashedRekordV001Body(hashedRekordEntry, bundle);
-    case "0.0.2":
-      return verifyHashedRekordV002Body(hashedRekordEntry, bundle);
-    default:
-      throw new Error(
-        `Unsupported hashedrekord version: ${hashedRekordEntry.apiVersion}`
-      );
-  }
+interface HashedRekordEntry extends RekorEntry {
+  apiVersion: "0.0.1" | "0.0.2";
+  kind: "hashedrekord";
+  spec: HashedRekordSpec | HashedRekordV002Spec;
 }
 
-function verifyHashedRekordV001Body(
-  entry: HashedRekordEntry,
-  bundle: SigstoreBundle
+export function verifyHashedRekordBody(
+  entry: RekorEntry,
+  bundle: SigstoreBundle,
+  cert: X509Certificate,
 ): void {
-  const spec = entry.spec as HashedRekordSpec;
+  const hashedRekordEntry = entry as HashedRekordEntry;
   if (!bundle.messageSignature) {
     throw new Error("Bundle missing messageSignature for hashedrekord entry");
   }
+  const bundleSig = base64ToUint8Array(bundle.messageSignature.signature);
+  const bundleDigest = base64ToUint8Array(bundle.messageSignature.messageDigest.digest);
 
-  const tlogSig = spec.signature.content || "";
-  const tlogSigBytes = base64ToUint8Array(tlogSig);
-  const bundleSigBytes = base64ToUint8Array(bundle.messageSignature.signature);
+  // v0.0.1 stores the digest as hex and the certificate as base64 PEM; v0.0.2 uses base64 DER for both.
+  let tlogSig: Uint8Array, tlogDigest: Uint8Array;
+  switch (hashedRekordEntry.apiVersion) {
+    case "0.0.1": {
+      const spec = hashedRekordEntry.spec as HashedRekordSpec;
+      tlogSig = base64ToUint8Array(spec.signature?.content || "");
+      tlogDigest = hexToUint8Array(spec.data?.hash?.value || "");
+      assertLoggedCertificate(cert, spec.signature?.publicKey?.content, true);
+      break;
+    }
+    case "0.0.2": {
+      const spec = (hashedRekordEntry.spec as HashedRekordV002Spec).hashedRekordV002;
+      tlogSig = base64ToUint8Array(spec?.signature?.content || "");
+      tlogDigest = base64ToUint8Array(spec?.data?.digest || "");
+      assertLoggedCertificate(cert, spec?.signature?.verifier?.x509Certificate?.rawBytes, false);
+      break;
+    }
+    default:
+      throw new Error(`Unsupported hashedrekord version: ${hashedRekordEntry.apiVersion}`);
+  }
 
-  if (!uint8ArrayEqual(tlogSigBytes, bundleSigBytes)) {
+  if (!uint8ArrayEqual(tlogSig, bundleSig)) {
     throw new Error("Signature mismatch between TLog entry and bundle");
   }
-
-  const tlogDigest = spec.data.hash?.value || "";
-  const tlogDigestBytes = hexToUint8Array(tlogDigest);
-  const bundleDigestBytes = base64ToUint8Array(
-    bundle.messageSignature.messageDigest.digest
-  );
-
-  if (!uint8ArrayEqual(tlogDigestBytes, bundleDigestBytes)) {
+  if (!uint8ArrayEqual(tlogDigest, bundleDigest)) {
     throw new Error("Digest mismatch between TLog entry and bundle");
-  }
-}
-
-// New functionality for HashedRekord v0.0.2 (not in sigstore-js reference, which only supports v0.0.1)
-function verifyHashedRekordV002Body(
-  entry: HashedRekordEntry,
-  bundle: SigstoreBundle
-): void {
-  const spec = (entry.spec as HashedRekordV002Spec).hashedRekordV002;
-  if (!bundle.messageSignature) {
-    throw new Error("Bundle missing messageSignature for hashedrekord v0.0.2 entry");
-  }
-
-  // NOTE: HashedRekord v0.0.2 uses single base64 encoding (unlike intoto which is double-encoded)
-  // Verified against Sigstore conformance test suite bundles
-  const tlogSig = spec.signature.content || "";
-  const tlogSigBytes = base64ToUint8Array(tlogSig);
-  const bundleSigBytes = base64ToUint8Array(bundle.messageSignature.signature);
-
-  if (!uint8ArrayEqual(tlogSigBytes, bundleSigBytes)) {
-    throw new Error("Signature mismatch between TLog entry and bundle (v0.0.2)");
-  }
-
-  const tlogDigest = spec.data.digest || "";
-  const tlogDigestBytes = base64ToUint8Array(tlogDigest);
-  const bundleDigestBytes = base64ToUint8Array(
-    bundle.messageSignature.messageDigest.digest
-  );
-
-  if (!uint8ArrayEqual(tlogDigestBytes, bundleDigestBytes)) {
-    throw new Error("Digest mismatch between TLog entry and bundle (v0.0.2)");
   }
 }
