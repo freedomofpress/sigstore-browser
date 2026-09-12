@@ -21,6 +21,7 @@ import {
   uint8ArrayEqual,
   verifySignature,
 } from "@freedomofpress/crypto-browser";
+import { parseDER } from "../asn1.js";
 import { KeyTypes } from "../interfaces.js";
 import { DEFAULT_HASH_ALGORITHM, ECDSA_CURVE_NAMES, ECDSA_SIGNATURE_ALGOS, OID_RSASSA_PSS, RSA_SIGNATURE_ALGOS, SHA2_HASH_ALGOS } from "../oid.js";
 import {
@@ -115,8 +116,7 @@ export class X509Certificate {
 
   public static parse(cert: Uint8Array | string): X509Certificate {
     const der = typeof cert === "string" ? toDER(cert) : cert;
-    const asn1 = ASN1Obj.parseBuffer(der);
-    return new X509Certificate(asn1);
+    return new X509Certificate(parseDER(der));
   }
 
   get tbsCertificate(): ASN1Obj {

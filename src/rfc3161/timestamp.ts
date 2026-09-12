@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 import { ASN1Obj, uint8ArrayEqual, verifySignature } from "@freedomofpress/crypto-browser";
+import { parseDER } from "../asn1.js";
 import { HashAlgorithms } from "../interfaces.js";
 import { ECDSA_SIGNATURE_ALGOS, RSA_SIGNATURE_ALGOS, SHA2_HASH_ALGOS } from "../oid.js";
 import { RFC3161TimestampVerificationError } from "./error.js";
@@ -31,8 +32,7 @@ export class RFC3161Timestamp {
   }
 
   public static parse(der: Uint8Array): RFC3161Timestamp {
-    const asn1 = ASN1Obj.parseBuffer(der);
-    return new RFC3161Timestamp(asn1);
+    return new RFC3161Timestamp(parseDER(der));
   }
 
   get status(): bigint {
