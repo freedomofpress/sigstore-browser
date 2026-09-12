@@ -17,7 +17,7 @@ import {
   X509Certificate,
   X509SCTExtension,
 } from "./x509/index.js";
-import type { SigstoreBundle, TLogEntry } from "./bundle.js";
+import { assertBundle, type SigstoreBundle, type TLogEntry } from "./bundle.js";
 import { preAuthEncoding } from "./dsse.js";
 import {
   CertAuthority,
@@ -38,37 +38,18 @@ import { TrustedRootProvider } from "./trust/tuf.js";
 import type { VerificationPolicy } from "./policy.js";
 import { AnyOf, AllOf, OIDCIssuer, OIDCIssuerV2, Identity } from "./policy.js";
 
-const MEDIA_TYPE_BASE = "application/vnd.dev.sigstore.bundle";
 // Upper bound on log entries per bundle, matching sigstore-go's MaxAllowedTlogEntries.
 const MAX_TLOG_ENTRIES = 32;
 
-/**
- * Extract bundle version from mediaType string
- * Reference: https://github.com/sigstore/sigstore-go/blob/main/pkg/bundle/bundle.go#L159-L177
- */
+// Returns the bundle version from the media type; unknown media types are rejected like sigstore-go does.
 function getBundleVersion(mediaType: string): string {
-  switch (mediaType) {
-    case `${MEDIA_TYPE_BASE}+json;version=0.1`:
-      return "0.1";
-    case `${MEDIA_TYPE_BASE}+json;version=0.2`:
-      return "0.2";
-    case `${MEDIA_TYPE_BASE}+json;version=0.3`:
-      return "0.3";
+  const legacy = /^application\/vnd\.dev\.sigstore\.bundle\+json;version=(0\.[123])$/.exec(mediaType);
+  const current = /^application\/vnd\.dev\.sigstore\.bundle\.v(\d+\.\d+(?:\.\d+)?)\+json$/.exec(mediaType);
+  const version = legacy?.[1] ?? current?.[1];
+  if (!version) {
+    throw new Error(`Unsupported bundle media type: ${mediaType}`);
   }
-
-  // New format: "application/vnd.dev.sigstore.bundle.v0.3+json"
-  if (mediaType.startsWith(`${MEDIA_TYPE_BASE}.v`) && mediaType.endsWith("+json")) {
-    const version = mediaType
-      .replace(`${MEDIA_TYPE_BASE}.v`, "")
-      .replace("+json", "");
-    // Basic semver validation (major.minor or major.minor.patch)
-    if (/^\d+\.\d+(\.\d+)?$/.test(version)) {
-      return version;
-    }
-  }
-
-  // Default to 0.1 for unknown formats
-  return "0.1";
+  return version;
 }
 
 /**
@@ -87,14 +68,9 @@ export function assertRekorV2Timestamp(
 
 // Returns the bundle's single signature, from either the message signature or the DSSE envelope.
 function bundleSignature(bundle: SigstoreBundle): Uint8Array {
-  if (bundle.messageSignature) {
-    return base64ToUint8Array(bundle.messageSignature.signature);
-  }
-  const sigs = bundle.dsseEnvelope?.signatures;
-  if (sigs?.length !== 1) {
-    throw new Error(`Bundle must carry a message signature or exactly one DSSE signature, got ${sigs?.length ?? 0}`);
-  }
-  return base64ToUint8Array(sigs[0].sig);
+  return base64ToUint8Array(
+    bundle.messageSignature ? bundle.messageSignature.signature : bundle.dsseEnvelope.signatures[0].sig,
+  );
 }
 
 export interface SigstoreVerifierOptions {
@@ -400,7 +376,7 @@ export class SigstoreVerifier {
       const log = this.root!.rekor.find((l) => uint8ArrayEqual(l.logId, logId));
       if (!log) continue;
 
-      const hasPromise = !!entry.inclusionPromise?.signedEntryTimestamp;
+      const hasPromise = entry.inclusionPromise !== undefined;
       if (!entry.inclusionProof && (requireProof || !hasPromise)) {
         throw new Error("Transparency log entry requires an inclusion proof.");
       }
@@ -487,6 +463,7 @@ export class SigstoreVerifier {
     data: Uint8Array,
     isDigestOnly: boolean = false,
   ): Promise<boolean> {
+    assertBundle(bundle);
     const signature = bundleSignature(bundle);
     const signingCert = await this.verifyBundle(bundle, policy, signature);
     const publicKey = await signingCert.publicKeyObj;
@@ -559,6 +536,7 @@ export class SigstoreVerifier {
     bundle: SigstoreBundle,
     policy: VerificationPolicy,
   ): Promise<{ payloadType: string; payload: Uint8Array }> {
+    assertBundle(bundle);
     if (!bundle.dsseEnvelope) {
       throw new Error("Bundle does not contain a DSSE envelope");
     }
