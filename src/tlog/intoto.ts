@@ -71,13 +71,8 @@ export async function verifyIntotoBody(
     throw new Error("Intoto entry must have exactly one signature");
   }
 
-  // The signature in the intoto tlog entry is double-base64-encoded:
-  // 1. Raw signature bytes are base64-encoded (normal)
-  // 2. That base64 string is base64-encoded again (for storage in JSON)
-  // So we decode twice: base64 -> string -> base64 -> bytes
-  const tlogSigBase64 = tlogEnvelope.signatures[0].sig;
-  const tlogSigDecoded = base64Decode(tlogSigBase64); // First decode: base64 -> UTF-8 string (which contains base64)
-  const tlogSigBytes = base64ToUint8Array(tlogSigDecoded); // Second decode: base64 string -> raw bytes
+  // The intoto entry stores the base64 signature base64-encoded once more, so decode twice.
+  const tlogSigBytes = base64ToUint8Array(base64Decode(tlogEnvelope.signatures[0].sig));
 
   assertLoggedCertificate(cert, tlogEnvelope.signatures[0].publicKey, true);
 

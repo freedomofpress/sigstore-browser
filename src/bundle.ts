@@ -120,7 +120,9 @@ export function assertBundle(b: unknown): asserts b is SigstoreBundle {
     check(isObj(e) && isDigits(e.logIndex) && isStr(e.logId?.keyId) && isStr(e.canonicalizedBody), "tlog entry");
     check(isStr(e.kindVersion?.kind) && isStr(e.kindVersion?.version), "tlog entry kindVersion");
     check(e.integratedTime == null || isDigits(e.integratedTime), "tlog entry integratedTime");
-    check(e.inclusionPromise === undefined || (isStr(e.inclusionPromise?.signedEntryTimestamp) && e.inclusionPromise.signedEntryTimestamp !== ""), "inclusion promise");
+    // A SET signs the integrated time, so a promise without one is malformed.
+    const set = e.inclusionPromise?.signedEntryTimestamp;
+    check(e.inclusionPromise === undefined || (isStr(set) && set !== "" && isDigits(e.integratedTime)), "inclusion promise");
     const p = e.inclusionProof;
     check(
       p === undefined ||

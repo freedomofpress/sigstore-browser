@@ -13,10 +13,11 @@ import {
 
 import { assertBundle, type SigstoreBundle, type TLogEntry } from "./bundle.js";
 import { preAuthEncoding } from "./dsse.js";
-import { HashAlgorithms, KeyTypes } from "./interfaces.js";
 import {
   CertAuthority,
   CTLog,
+  HashAlgorithms,
+  KeyTypes,
   RawCAs,
   RawLog,
   RawLogs,
@@ -25,8 +26,7 @@ import {
   SigstoreRoots,
   TrustedRoot,
 } from "./interfaces.js";
-import type { VerificationPolicy } from "./policy.js";
-import { AllOf, AnyOf, Identity,OIDCIssuer, OIDCIssuerV2 } from "./policy.js";
+import { AllOf, AnyOf, Identity, OIDCIssuer, OIDCIssuerV2, type VerificationPolicy } from "./policy.js";
 import { verifyBundleTimestamp } from "./timestamp/tsa.js";
 import { verifyTLogBody } from "./tlog/body.js";
 import { verifyCheckpoint } from "./tlog/checkpoint.js";

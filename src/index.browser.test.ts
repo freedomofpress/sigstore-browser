@@ -293,10 +293,13 @@ describe("Bundle structural validation", () => {
     expect(() => assertBundle(b)).toThrow("integratedTime");
   });
 
-  it("rejects an empty inclusion promise", () => {
+  it("rejects an empty inclusion promise or one without an integrated time", () => {
     const b = bundle();
     b.verificationMaterial.tlogEntries[0].inclusionPromise.signedEntryTimestamp = "";
     expect(() => assertBundle(b)).toThrow("inclusion promise");
+    const c = bundle() as Record<string, unknown>;
+    (c.verificationMaterial as { tlogEntries: Record<string, unknown>[] }).tlogEntries[0].integratedTime = null;
+    expect(() => assertBundle(c)).toThrow("inclusion promise");
   });
 
   it("rejects both or neither of messageSignature and dsseEnvelope", () => {
