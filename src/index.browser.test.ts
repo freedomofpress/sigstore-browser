@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { SigstoreVerifier, assertRekorV2Timestamp } from "./sigstore.js";
+import { SigstoreVerifier } from "./sigstore.js";
+import { assertBundle } from "./bundle.js";
+import { parseDER } from "./asn1.js";
 import { X509Certificate } from "./x509/cert.js";
 
 describe("Sigstore Browser Integration Tests", () => {
@@ -255,36 +257,91 @@ ewS+2T7Qz4oXaQMidPOjr1Q8WKqaKO4yCtC8cz4qVWi3lNqAcAGtonQMXUiflEWV
   });
 });
 
-describe("Rekor v2 observer-timestamp enforcement", () => {
-  // Regression test: a Rekor-v2-shaped bundle (no integratedTime in the tlog
-  // entry) must carry a signed RFC3161 timestamp. A previous guard only checked
-  // that `timestampVerificationData` was present, which an empty object ({})
-  // satisfies in JavaScript — letting a crafted bundle pass verification with
-  // zero verified timestamps and the signing certificate's validity window left
-  // completely unanchored in time.
-
-  it("rejects a missing timestampVerificationData", () => {
-    expect(() => assertRekorV2Timestamp(undefined)).toThrow(
-      "Rekor v2 bundles require a timestamp for verification.",
-    );
+describe("Bundle structural validation", () => {
+  const entry = {
+    logIndex: "1",
+    logId: { keyId: "AA==" },
+    kindVersion: { kind: "dsse", version: "0.0.1" },
+    integratedTime: "1",
+    inclusionPromise: { signedEntryTimestamp: "AA==" },
+    canonicalizedBody: "e30=",
+  };
+  const bundle = () => structuredClone({
+    mediaType: "application/vnd.dev.sigstore.bundle.v0.3+json",
+    verificationMaterial: { certificate: { rawBytes: "AA==" }, tlogEntries: [entry] },
+    dsseEnvelope: { payload: "AA==", payloadType: "t", signatures: [{ sig: "AA==" }] },
   });
 
-  it("rejects an empty timestampVerificationData object ({})", () => {
-    // This is the exact bypass the fix closes: {} is truthy.
-    expect(() => assertRekorV2Timestamp({})).toThrow(
-      "Rekor v2 bundles require a timestamp for verification.",
-    );
+  it("accepts a well-formed bundle", () => {
+    expect(() => assertBundle(bundle())).not.toThrow();
   });
 
-  it("rejects timestampVerificationData with an empty rfc3161Timestamps array", () => {
-    expect(() =>
-      assertRekorV2Timestamp({ rfc3161Timestamps: [] }),
-    ).toThrow("Rekor v2 bundles require a timestamp for verification.");
+  it("rejects a bundle without tlog entries", () => {
+    const b = bundle();
+    b.verificationMaterial.tlogEntries = [];
+    expect(() => assertBundle(b)).toThrow("tlogEntries");
   });
 
-  it("accepts timestampVerificationData with at least one RFC3161 timestamp", () => {
-    expect(() =>
-      assertRekorV2Timestamp({ rfc3161Timestamps: [{ signedTimestamp: "…" }] }),
-    ).not.toThrow();
+  it("rejects numeric logIndex and integratedTime", () => {
+    const b: any = bundle();
+    b.verificationMaterial.tlogEntries[0].logIndex = 1;
+    expect(() => assertBundle(b)).toThrow("tlog entry");
+    const c: any = bundle();
+    c.verificationMaterial.tlogEntries[0].integratedTime = 1;
+    expect(() => assertBundle(c)).toThrow("integratedTime");
+  });
+
+  it("rejects an empty inclusion promise", () => {
+    const b = bundle();
+    b.verificationMaterial.tlogEntries[0].inclusionPromise.signedEntryTimestamp = "";
+    expect(() => assertBundle(b)).toThrow("inclusion promise");
+  });
+
+  it("rejects both or neither of messageSignature and dsseEnvelope", () => {
+    const b: any = bundle();
+    b.messageSignature = { messageDigest: { algorithm: "SHA2_256", digest: "AA==" }, signature: "AA==" };
+    expect(() => assertBundle(b)).toThrow("exactly one");
+    const c: any = bundle();
+    delete c.dsseEnvelope;
+    expect(() => assertBundle(c)).toThrow("exactly one");
+  });
+
+  it("rejects a DSSE envelope without exactly one signature", () => {
+    const b = bundle();
+    b.dsseEnvelope.signatures.push({ sig: "AA==" });
+    expect(() => assertBundle(b)).toThrow("exactly one signature");
+  });
+});
+
+describe("Strict DER parsing", () => {
+  const seq = (...inner: number[]) => new Uint8Array([0x30, inner.length, ...inner]);
+
+  it("parses canonical DER", () => {
+    expect(parseDER(seq(0x05, 0x00)).subs.length).toBe(1);
+  });
+
+  it("rejects trailing bytes", () => {
+    expect(() => parseDER(new Uint8Array([...seq(0x05, 0x00), 0x00]))).toThrow("Invalid DER");
+  });
+
+  it("rejects non-minimal length encodings", () => {
+    expect(() => parseDER(new Uint8Array([0x30, 0x81, 0x02, 0x05, 0x00]))).toThrow("Invalid DER");
+  });
+
+  it("rejects truncated input", () => {
+    expect(() => parseDER(new Uint8Array([0x30, 0x05, 0x05, 0x00]))).toThrow("Invalid DER");
+  });
+
+  it("rejects excessive nesting before the recursive parser runs", () => {
+    let buf = new Uint8Array([0x05, 0x00]);
+    for (let i = 0; i < 5000; i++) {
+      const len = buf.length;
+      const hdr = len < 128 ? [0x30, len] : len < 256 ? [0x30, 0x81, len] : [0x30, 0x82, len >> 8, len & 0xff];
+      const next = new Uint8Array(hdr.length + len);
+      next.set(hdr);
+      next.set(buf, hdr.length);
+      buf = next;
+    }
+    expect(() => parseDER(buf)).toThrow("nesting too deep");
   });
 });

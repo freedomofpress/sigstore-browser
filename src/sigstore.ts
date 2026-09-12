@@ -24,7 +24,6 @@ import {
   CTLog,
   RawCAs,
   RawLogs,
-  RawTimestampAuthorities,
   RekorKeyInfo,
   Sigstore,
   SigstoreRoots,
@@ -52,25 +51,16 @@ function getBundleVersion(mediaType: string): string {
   return version;
 }
 
-/**
- * Rekor v2 entries omit `integratedTime` and MUST carry a signed RFC3161
- * timestamp instead. Check for actual content, not just presence: an empty
- * `timestampVerificationData: {}` is truthy, so `if (!timestampVerificationData)`
- * is bypassable and leaves the cert validity window unanchored in time.
- */
-export function assertRekorV2Timestamp(
-  timestampData?: { rfc3161Timestamps?: readonly unknown[] },
-): void {
-  if (!timestampData?.rfc3161Timestamps?.length) {
-    throw new Error("Rekor v2 bundles require a timestamp for verification.");
-  }
-}
-
 // Returns the bundle's single signature, from either the message signature or the DSSE envelope.
 function bundleSignature(bundle: SigstoreBundle): Uint8Array {
   return base64ToUint8Array(
     bundle.messageSignature ? bundle.messageSignature.signature : bundle.dsseEnvelope.signatures[0].sig,
   );
+}
+
+// Converts a trusted root validity window to dates; a missing end means no expiry.
+function validity(v: { start: string; end?: string }): { start: Date; end: Date } {
+  return { start: new Date(v.start), end: v.end ? new Date(v.end) : new Date(8640000000000000) };
 }
 
 export interface SigstoreVerifierOptions {
@@ -109,37 +99,22 @@ export class SigstoreVerifier {
     );
   }
 
-  async loadCTLogs(frozenTimestamp: Date, ctlogs: RawLogs): Promise<CTLog[]> {
-    const result: CTLog[] = [];
-
-    for (const log of ctlogs) {
-      const start = new Date(log.publicKey.validFor.start);
-      const end = log.publicKey.validFor.end
-        ? new Date(log.publicKey.validFor.end)
-        : new Date('9999-12-31'); // No expiry means valid forever
-
-      // Include logs that are valid (started before frozen timestamp)
-      // We keep all logs, even expired ones, for historical verification
-      if (start <= frozenTimestamp) {
-        const publicKey = await importKey(
+  // Loads every CT log; SCTs select their log by ID and are checked against its validity window.
+  async loadCTLogs(ctlogs: RawLogs): Promise<CTLog[]> {
+    if (ctlogs.length === 0) {
+      throw new Error("Could not find any CT logs in sigstore root.");
+    }
+    return Promise.all(
+      ctlogs.map(async (log) => ({
+        logID: base64ToUint8Array(log.logId.keyId),
+        publicKey: await importKey(
           log.publicKey.keyDetails,
           log.publicKey.keyDetails,
           log.publicKey.rawBytes,
-        );
-
-        result.push({
-          logID: base64ToUint8Array(log.logId.keyId),
-          publicKey,
-          validFor: { start, end },
-        });
-      }
-    }
-
-    if (result.length === 0) {
-      throw new Error("Could not find any valid CT logs in sigstore root.");
-    }
-
-    return result;
+        ),
+        validFor: validity(log.publicKey.validFor),
+      })),
+    );
   }
 
   // Adapted from https://github.com/sigstore/sigstore-js/blob/main/packages/verify/src/key/certificate.ts#L22-L53
@@ -172,75 +147,24 @@ export class SigstoreVerifier {
     throw new Error(`Failed to verify certificate chain: ${lastError?.message || 'No valid CAs found'}`);
   }
 
-  // Load timestamp authorities that are valid at the frozen timestamp.
-  loadTSA(
-    frozenTimestamp: Date,
-    tsas?: RawTimestampAuthorities,
-  ): CertAuthority[] {
-    if (!tsas || tsas.length === 0) {
-      return [];
-    }
-
-    const result: CertAuthority[] = [];
-
-    for (const tsa of tsas) {
-      const start = new Date(tsa.validFor.start);
-      const end = tsa.validFor.end ? new Date(tsa.validFor.end) : new Date(8640000000000000);
-
-      if (frozenTimestamp > start && frozenTimestamp < end) {
-        const certChain = tsa.certChain.certificates.map(cert =>
-          X509Certificate.parse(base64ToUint8Array(cert.rawBytes))
-        );
-
-        if (certChain.length > 0) {
-          result.push({
-            certChain,
-            validFor: { start, end },
-          });
-        }
-      }
-    }
-
-    return result;
-  }
-
-  // Load certificate authorities (Fulcio CAs) that are valid at the frozen timestamp.
-  loadCA(frozenTimestamp: Date, cas: RawCAs): CertAuthority[] {
-    const result: CertAuthority[] = [];
-
-    for (const ca of cas) {
-      const start = new Date(ca.validFor.start);
-      const end = ca.validFor.end ? new Date(ca.validFor.end) : new Date(8640000000000000);
-
-      if (frozenTimestamp > start && frozenTimestamp < end) {
-        const certChain = ca.certChain.certificates.map(cert =>
-          X509Certificate.parse(base64ToUint8Array(cert.rawBytes))
-        );
-
-        if (certChain.length > 0) {
-          result.push({
-            certChain,
-            validFor: { start, end },
-          });
-        }
-      }
-    }
-
-    return result;
+  // Loads every Fulcio CA; verifyCertificateChain() selects CAs by the observer timestamp.
+  loadCA(cas: RawCAs): CertAuthority[] {
+    return cas
+      .filter((ca) => ca.certChain.certificates.length > 0)
+      .map((ca) => ({
+        certChain: ca.certChain.certificates.map((cert) =>
+          X509Certificate.parse(base64ToUint8Array(cert.rawBytes)),
+        ),
+        validFor: validity(ca.validFor),
+      }));
   }
 
   async loadSigstoreRoot(rawRoot: TrustedRoot) {
-    const frozenTimestamp = new Date();
-
     this.rawRoot = rawRoot;
     this.root = {
       rekor: await this.loadLog(rawRoot[SigstoreRoots.tlogs]),
-      ctlogs: await this.loadCTLogs(frozenTimestamp, rawRoot[SigstoreRoots.ctlogs]),
-      certificateAuthorities: this.loadCA(
-        frozenTimestamp,
-        rawRoot[SigstoreRoots.certificateAuthorities],
-      ),
-      timestampAuthorities: this.loadTSA(frozenTimestamp, rawRoot.timestampAuthorities),
+      ctlogs: await this.loadCTLogs(rawRoot[SigstoreRoots.ctlogs]),
+      certificateAuthorities: this.loadCA(rawRoot[SigstoreRoots.certificateAuthorities]),
     };
   }
 
@@ -387,12 +311,8 @@ export class SigstoreVerifier {
         await verifyMerkleInclusion(entry);
         await verifyCheckpoint(entry, log);
       }
-      if (entry.integratedTime) {
-        if (!cert.validForDate(new Date(Number(entry.integratedTime) * 1000))) {
-          throw new Error("Artifact signing was logged outside of the certificate validity.");
-        }
-      } else {
-        assertRekorV2Timestamp(bundle.verificationMaterial.timestampVerificationData);
+      if (entry.integratedTime && !cert.validForDate(new Date(Number(entry.integratedTime) * 1000))) {
+        throw new Error("Artifact signing was logged outside of the certificate validity.");
       }
       await verifyTLogBody(entry, bundle, cert);
       verifiedLogs.add(Uint8ArrayToHex(logId));
@@ -423,35 +343,33 @@ export class SigstoreVerifier {
 
     policy.verify(signingCert);
 
-    const certPath = await this.verifyCertificateChain(
-      signingCert.notBefore,
-      signingCert,
-      this.root.certificateAuthorities,
+    // Observer timestamps come from SET-bound integrated times and verified RFC 3161 timestamps.
+    // Rekor v2 entries carry no integrated time, so they need a TSA timestamp to be anchored at all.
+    const integratedTimes = await this.verifyTlogEntries(signingCert, bundle);
+    const tsaTimes = await verifyBundleTimestamp(
+      bundle.verificationMaterial.timestampVerificationData,
+      signature,
+      this.rawRoot.timestampAuthorities || [],
     );
+    if (tsaTimes.length < this.options.tsaThreshold) {
+      throw new Error(`Not enough verified TSA timestamps: ${tsaTimes.length} < ${this.options.tsaThreshold}`);
+    }
+    const observerTimes = [...integratedTimes, ...tsaTimes];
+    if (observerTimes.length === 0) {
+      throw new Error("No verified observer timestamp anchors the signature in time.");
+    }
+
+    // The CA window and the whole chain are checked at every observer time, never at the leaf's own notBefore.
+    let certPath: X509Certificate[] = [];
+    for (const ts of observerTimes) {
+      certPath = await this.verifyCertificateChain(ts, signingCert, this.root.certificateAuthorities);
+    }
     const issuerCert = certPath.length > 1 ? certPath[1] : certPath[0];
     const verifiedSCTs = await this.verifySCT(signingCert, issuerCert, this.root.ctlogs);
     if (verifiedSCTs.length < this.options.ctlogThreshold) {
       throw new Error(
         `Not enough valid SCTs: found ${verifiedSCTs.length}, required ${this.options.ctlogThreshold}`,
       );
-    }
-
-    await this.verifyTlogEntries(signingCert, bundle);
-
-    const verifiedTimestamps = await verifyBundleTimestamp(
-      bundle.verificationMaterial.timestampVerificationData,
-      signature,
-      this.rawRoot.timestampAuthorities || [],
-    );
-    if (verifiedTimestamps.length < this.options.tsaThreshold) {
-      throw new Error(
-        `Not enough verified TSA timestamps: ${verifiedTimestamps.length} < ${this.options.tsaThreshold}`,
-      );
-    }
-    for (const ts of verifiedTimestamps) {
-      if (!signingCert.validForDate(ts)) {
-        throw new Error("Certificate was not valid at the time of timestamping");
-      }
     }
 
     return signingCert;

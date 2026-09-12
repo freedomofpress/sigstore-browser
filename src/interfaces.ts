@@ -60,7 +60,6 @@ export interface Sigstore {
   rekor: RekorKeyInfo[];
   ctlogs: CTLog[];
   certificateAuthorities: CertAuthority[];
-  timestampAuthorities: CertAuthority[];
 }
 
 export interface RawLog {
