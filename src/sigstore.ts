@@ -10,7 +10,7 @@ import {
   verifySignature,
   verifySignatureOverDigest,
 } from "@freedomofpress/crypto-browser";
-import { HashAlgorithms } from "./interfaces.js";
+import { HashAlgorithms, KeyTypes } from "./interfaces.js";
 import {
   CertificateChainVerifier,
   EXTENSION_OID_SCT,
@@ -23,6 +23,7 @@ import {
   CertAuthority,
   CTLog,
   RawCAs,
+  RawLog,
   RawLogs,
   RekorKeyInfo,
   Sigstore,
@@ -58,6 +59,23 @@ function bundleSignature(bundle: SigstoreBundle): Uint8Array {
   );
 }
 
+// Fixed SubjectPublicKeyInfo prefix for Ed25519 keys: SEQUENCE { SEQUENCE { OID 1.3.101.112 }, BIT STRING (32 bytes) }.
+const ED25519_SPKI_PREFIX = new Uint8Array([0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00]);
+
+// Imports a trusted root log key. Ed25519 keys are passed as the raw 32 bytes because crypto-browser's
+// fallback for browsers without native Ed25519 hands importKey's bytes straight to the verifier.
+async function importLogKey(log: RawLog): Promise<CryptoKey> {
+  const { keyDetails, rawBytes } = log.publicKey;
+  if (!keyDetails.includes("ED25519")) {
+    return importKey(keyDetails, keyDetails, rawBytes);
+  }
+  const spki = base64ToUint8Array(rawBytes);
+  if (spki.length !== 44 || !uint8ArrayEqual(spki.subarray(0, 12), ED25519_SPKI_PREFIX)) {
+    throw new Error("Malformed Ed25519 public key in trusted root");
+  }
+  return importKey(KeyTypes.Ed25519, KeyTypes.Ed25519, Uint8ArrayToHex(spki.subarray(12)));
+}
+
 // Converts a trusted root validity window to dates; a missing end means no expiry.
 function validity(v: { start: string; end?: string }): { start: Date; end: Date } {
   return { start: new Date(v.start), end: v.end ? new Date(v.end) : new Date(8640000000000000) };
@@ -88,11 +106,7 @@ export class SigstoreVerifier {
   async loadLog(logs: RawLogs): Promise<RekorKeyInfo[]> {
     return Promise.all(
       logs.map(async (log) => ({
-        publicKey: await importKey(
-          log.publicKey.keyDetails,
-          log.publicKey.keyDetails,
-          log.publicKey.rawBytes,
-        ),
+        publicKey: await importLogKey(log),
         logId: base64ToUint8Array(log.logId.keyId),
         hashAlgorithm: log.hashAlgorithm,
       })),
@@ -107,11 +121,7 @@ export class SigstoreVerifier {
     return Promise.all(
       ctlogs.map(async (log) => ({
         logID: base64ToUint8Array(log.logId.keyId),
-        publicKey: await importKey(
-          log.publicKey.keyDetails,
-          log.publicKey.keyDetails,
-          log.publicKey.rawBytes,
-        ),
+        publicKey: await importLogKey(log),
         validFor: validity(log.publicKey.validFor),
       })),
     );
