@@ -14,8 +14,9 @@
  */
 
 import { base64ToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
+import { assertTimestampVerificationData } from "../bundle.js";
 import { CertificateChainVerifier, X509Certificate } from "../x509/index.js";
-import { RawTimestampAuthority } from "../interfaces.js";
+import { parseValidityPeriod, RawTimestampAuthority } from "../interfaces.js";
 import { RFC3161Timestamp } from "../rfc3161/index.js";
 
 /**
@@ -32,6 +33,20 @@ export async function verifyRFC3161Timestamp(
   data: Uint8Array,
   timestampAuthorities: RawTimestampAuthority[]
 ): Promise<Date> {
+  return (await verifyTimestamp(timestamp, data, timestampAuthorities)).signingTime;
+}
+
+export interface VerifiedTimestamp {
+  signingTime: Date;
+  // Empty means unknown, which cannot add independence to named operators.
+  operator: string;
+}
+
+async function verifyTimestamp(
+  timestamp: RFC3161Timestamp,
+  data: Uint8Array,
+  timestampAuthorities: RawTimestampAuthority[]
+): Promise<VerifiedTimestamp> {
   const signingTime = timestamp.signingTime;
 
   // Filter for CAs which were valid at the time of signing
@@ -51,18 +66,19 @@ export async function verifyRFC3161Timestamp(
     validAuthorities.map(ca => verifyTimestampForCA(timestamp, data, ca))
   );
 
-  const verified = verificationResults.some(
+  const verified = verificationResults.findIndex(
     result => result.status === "fulfilled"
   );
 
-  if (!verified) {
+  if (verified < 0) {
     const errors = verificationResults
       .filter(r => r.status === "rejected")
       .map(r => (r as PromiseRejectedResult).reason?.message || 'Unknown error');
     throw new Error(`Timestamp could not be verified against any trusted authority. Errors: ${errors.join(', ')}`);
   }
 
-  return signingTime;
+  const ca = validAuthorities[verified];
+  return { signingTime, operator: ca.operator || "" };
 }
 
 /**
@@ -75,18 +91,8 @@ function filterCertAuthorities(
   validAt: Date
 ): RawTimestampAuthority[] {
   return authorities.filter(ca => {
-    if (ca.validFor) {
-      const start = ca.validFor.start ? new Date(ca.validFor.start) : null;
-      const end = ca.validFor.end ? new Date(ca.validFor.end) : null;
-
-      if (start && validAt < start) {
-        return false;
-      }
-      if (end && validAt > end) {
-        return false;
-      }
-    }
-    return true;
+    const { start, end } = parseValidityPeriod(ca.validFor);
+    return start <= validAt && validAt <= end;
   });
 }
 
@@ -160,14 +166,15 @@ async function verifyTimestampForCA(
  * @param timestampData - The timestamp verification data from the bundle
  * @param signature - The signature being verified
  * @param timestampAuthorities - List of trusted timestamp authorities
- * @returns Array of verified signing times (empty if no timestamps present)
+ * @returns The verified signing times and their operators (empty if no timestamps present)
  * @throws Error if any timestamp fails verification or duplicates are found
  */
 export async function verifyBundleTimestamp(
   timestampData: any,
   signature: Uint8Array,
   timestampAuthorities: RawTimestampAuthority[]
-): Promise<Date[]> {
+): Promise<VerifiedTimestamp[]> {
+  assertTimestampVerificationData(timestampData);
   if (!timestampData?.rfc3161Timestamps?.length) {
     return [];
   }
@@ -175,21 +182,15 @@ export async function verifyBundleTimestamp(
   // Verify ALL timestamps - each must succeed (matches sigstore-js behavior)
   // Collect verification results for duplicate checking after verification
   // Reference: https://github.com/sigstore/sigstore-js/blob/main/packages/verify/src/verifier.ts#L86-L92
-  const verifiedResults: Array<{ signingTime: Date; signerSerialNumber: string }> = [];
+  const verifiedResults: Array<VerifiedTimestamp & { signerSerialNumber: string }> = [];
 
   for (const tsData of timestampData.rfc3161Timestamps) {
     // Decode the base64-encoded timestamp
     const timestampBytes = base64ToUint8Array(tsData.signedTimestamp);
     const timestamp = RFC3161Timestamp.parse(timestampBytes);
 
-    const signingTime = await verifyRFC3161Timestamp(
-      timestamp,
-      signature,
-      timestampAuthorities
-    );
-
     verifiedResults.push({
-      signingTime,
+      ...(await verifyTimestamp(timestamp, signature, timestampAuthorities)),
       signerSerialNumber: Array.from(timestamp.signerSerialNumber).join(','),
     });
   }
@@ -207,5 +208,5 @@ export async function verifyBundleTimestamp(
     }
   }
 
-  return verifiedResults.map(r => r.signingTime);
+  return verifiedResults;
 }

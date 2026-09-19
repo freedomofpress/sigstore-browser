@@ -14,7 +14,8 @@
 import { base64ToUint8Array, hexToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
 import { getHashAlgorithm } from "../interfaces.js";
 import type { SigstoreBundle } from "../bundle.js";
-import type { RekorEntry } from "./body.js";
+import type { X509Certificate } from "../x509/cert.js";
+import { assertLoggedCertificate, type RekorEntry } from "./body.js";
 
 interface DSSESpec {
   signatures?: Array<{
@@ -40,15 +41,16 @@ interface DSSEEntry extends RekorEntry {
 
 export async function verifyDSSEBody(
   entry: RekorEntry,
-  bundle: SigstoreBundle
+  bundle: SigstoreBundle,
+  cert: X509Certificate,
 ): Promise<void> {
   const dsseEntry = entry as DSSEEntry;
 
   switch (dsseEntry.apiVersion) {
     case "0.0.1":
-      return verifyDSSE001Body(dsseEntry, bundle);
+      return verifyDSSE001Body(dsseEntry, bundle, cert);
     case "0.0.2":
-      return verifyDSSE002Body(dsseEntry, bundle);
+      return verifyDSSE002Body(dsseEntry, bundle, cert);
     default:
       throw new Error(
         `Unsupported dsse version: ${dsseEntry.apiVersion}`
@@ -58,7 +60,8 @@ export async function verifyDSSEBody(
 
 async function verifyDSSE001Body(
   entry: DSSEEntry,
-  bundle: SigstoreBundle
+  bundle: SigstoreBundle,
+  cert: X509Certificate,
 ): Promise<void> {
   if (!bundle.dsseEnvelope) {
     throw new Error("Bundle missing dsseEnvelope for DSSE entry");
@@ -67,6 +70,7 @@ async function verifyDSSE001Body(
   if (!entry.spec.signatures || entry.spec.signatures.length !== 1) {
     throw new Error("DSSE entry must have exactly one signature");
   }
+  assertLoggedCertificate(cert, entry.spec.signatures[0].verifier, true);
 
   const tlogSig = entry.spec.signatures[0].signature;
   const tlogSigBytes = base64ToUint8Array(tlogSig);
@@ -101,7 +105,8 @@ async function verifyDSSE001Body(
 // New functionality for DSSE v0.0.2 (not in sigstore-js reference, which only supports v0.0.1)
 async function verifyDSSE002Body(
   entry: DSSEEntry,
-  bundle: SigstoreBundle
+  bundle: SigstoreBundle,
+  cert: X509Certificate,
 ): Promise<void> {
   if (!bundle.dsseEnvelope) {
     throw new Error("Bundle missing dsseEnvelope for DSSE v0.0.2 entry");
@@ -115,6 +120,7 @@ async function verifyDSSE002Body(
   if (!spec.signatures || spec.signatures.length !== 1) {
     throw new Error("DSSE v0.0.2 entry must have exactly one signature");
   }
+  assertLoggedCertificate(cert, spec.signatures[0].verifier?.x509Certificate?.rawBytes, false);
 
   const tlogSig = spec.signatures[0].content;
   const tlogSigBytes = base64ToUint8Array(tlogSig);
