@@ -49,7 +49,7 @@ export const GITHUB_OIDC_ISSUER = "https://token.actions.githubusercontent.com";
  * Interface that all verification policies conform to.
  */
 export interface VerificationPolicy {
-  verify(cert: X509Certificate): void;
+  verify(cert: X509Certificate): void | Promise<void>;
 }
 
 /**
@@ -384,10 +384,10 @@ export class AnyOf implements VerificationPolicy {
     this.children = children;
   }
 
-  verify(cert: X509Certificate): void {
+  async verify(cert: X509Certificate): Promise<void> {
     for (const child of this.children) {
       try {
-        child.verify(cert);
+        await child.verify(cert);
         return;
       } catch {
         // Continue to next policy
@@ -408,12 +408,12 @@ export class AllOf implements VerificationPolicy {
     this.children = children;
   }
 
-  verify(cert: X509Certificate): void {
+  async verify(cert: X509Certificate): Promise<void> {
     if (this.children.length < 1) {
       throw new PolicyError("no child policies to verify");
     }
     for (const child of this.children) {
-      child.verify(cert);
+      await child.verify(cert);
     }
   }
 }

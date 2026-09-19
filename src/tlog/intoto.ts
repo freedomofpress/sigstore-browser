@@ -13,7 +13,8 @@
 import { base64Decode, base64ToUint8Array, hexToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
 import { getHashAlgorithm } from "../interfaces.js";
 import type { SigstoreBundle } from "../bundle.js";
-import type { RekorEntry } from "./body.js";
+import type { X509Certificate } from "../x509/cert.js";
+import { assertLoggedCertificate, type RekorEntry } from "./body.js";
 
 interface IntotoEnvelope {
   payload: string;
@@ -48,7 +49,8 @@ interface IntotoEntry extends RekorEntry {
 
 export async function verifyIntotoBody(
   entry: RekorEntry,
-  bundle: SigstoreBundle
+  bundle: SigstoreBundle,
+  cert: X509Certificate,
 ): Promise<void> {
   const intotoEntry = entry as IntotoEntry;
 
@@ -67,6 +69,7 @@ export async function verifyIntotoBody(
   if (!tlogEnvelope.signatures || tlogEnvelope.signatures.length !== 1) {
     throw new Error("Intoto entry must have exactly one signature");
   }
+  assertLoggedCertificate(cert, tlogEnvelope.signatures[0].publicKey, true);
 
   // The signature in the intoto tlog entry is double-base64-encoded:
   // 1. Raw signature bytes are base64-encoded (normal)

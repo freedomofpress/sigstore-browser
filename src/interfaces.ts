@@ -1,5 +1,24 @@
 import { X509Certificate } from "./x509/index.js";
 
+export function parseValidityPeriod(
+  validity: { start?: unknown; end?: unknown } | undefined,
+): { start: Date; end: Date } {
+  if (
+    typeof validity?.start !== "string" ||
+    (validity.end !== undefined && typeof validity.end !== "string")
+  ) {
+    throw new Error("Invalid authority validity period");
+  }
+  const start = new Date(validity.start);
+  const end = validity.end === undefined
+    ? new Date(8640000000000000)
+    : new Date(validity.end);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || start > end) {
+    throw new Error("Invalid authority validity period");
+  }
+  return { start, end };
+}
+
 export enum SigstoreRoots {
   certificateAuthorities = "certificateAuthorities",
   ctlogs = "ctlogs",
@@ -31,11 +50,13 @@ export interface RawTimestampAuthority {
     start: string;
     end?: string;
   };
+  operator?: string;
 }
 
 export interface CTLog {
   logID: Uint8Array;
   publicKey: CryptoKey;
+  operator: string;
   validFor: {
     start: Date;
     end: Date;
@@ -45,6 +66,12 @@ export interface CTLog {
 export interface RekorKeyInfo {
   publicKey: CryptoKey;
   logId: Uint8Array;
+  hashAlgorithm: string;
+  operator: string;
+  validFor: {
+    start: Date;
+    end: Date;
+  };
 }
 
 export interface CertAuthority {
@@ -56,10 +83,9 @@ export interface CertAuthority {
 }
 
 export interface Sigstore {
-  rekor: RekorKeyInfo | undefined;
+  rekor: RekorKeyInfo[];
   ctlogs: CTLog[];
   certificateAuthorities: CertAuthority[];
-  timestampAuthorities: CertAuthority[];
 }
 
 export interface RawLog {
@@ -76,6 +102,7 @@ export interface RawLog {
   logId: {
     keyId: string;
   };
+  operator?: string;
 }
 
 export type RawLogs = RawLog[];
