@@ -12,7 +12,8 @@
 
 import { base64ToUint8Array, hexToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
 import type { SigstoreBundle } from "../bundle.js";
-import type { RekorEntry } from "./body.js";
+import type { X509Certificate } from "../x509/cert.js";
+import { assertLoggedCertificate, type RekorEntry } from "./body.js";
 
 interface HashedRekordSpec {
   signature: {
@@ -39,8 +40,8 @@ interface HashedRekordV002Spec {
   hashedRekordV002: {
     signature: {
       content: string;
-      verifier: {
-        x509Certificate: {
+      verifier?: {
+        x509Certificate?: {
           rawBytes: string;
         };
       };
@@ -54,15 +55,16 @@ interface HashedRekordV002Spec {
 
 export async function verifyHashedRekordBody(
   entry: RekorEntry,
-  bundle: SigstoreBundle
+  bundle: SigstoreBundle,
+  cert: X509Certificate,
 ): Promise<void> {
   const hashedRekordEntry = entry as HashedRekordEntry;
 
   switch (hashedRekordEntry.apiVersion) {
     case "0.0.1":
-      return verifyHashedRekordV001Body(hashedRekordEntry, bundle);
+      return verifyHashedRekordV001Body(hashedRekordEntry, bundle, cert);
     case "0.0.2":
-      return verifyHashedRekordV002Body(hashedRekordEntry, bundle);
+      return verifyHashedRekordV002Body(hashedRekordEntry, bundle, cert);
     default:
       throw new Error(
         `Unsupported hashedrekord version: ${hashedRekordEntry.apiVersion}`
@@ -72,12 +74,14 @@ export async function verifyHashedRekordBody(
 
 function verifyHashedRekordV001Body(
   entry: HashedRekordEntry,
-  bundle: SigstoreBundle
+  bundle: SigstoreBundle,
+  cert: X509Certificate,
 ): void {
   const spec = entry.spec as HashedRekordSpec;
   if (!bundle.messageSignature) {
     throw new Error("Bundle missing messageSignature for hashedrekord entry");
   }
+  assertLoggedCertificate(cert, spec.signature?.publicKey?.content, true);
 
   const tlogSig = spec.signature.content || "";
   const tlogSigBytes = base64ToUint8Array(tlogSig);
@@ -101,12 +105,14 @@ function verifyHashedRekordV001Body(
 // New functionality for HashedRekord v0.0.2 (not in sigstore-js reference, which only supports v0.0.1)
 function verifyHashedRekordV002Body(
   entry: HashedRekordEntry,
-  bundle: SigstoreBundle
+  bundle: SigstoreBundle,
+  cert: X509Certificate,
 ): void {
   const spec = (entry.spec as HashedRekordV002Spec).hashedRekordV002;
   if (!bundle.messageSignature) {
     throw new Error("Bundle missing messageSignature for hashedrekord v0.0.2 entry");
   }
+  assertLoggedCertificate(cert, spec?.signature?.verifier?.x509Certificate?.rawBytes, false);
 
   // NOTE: HashedRekord v0.0.2 uses single base64 encoding (unlike intoto which is double-encoded)
   // Verified against Sigstore conformance test suite bundles

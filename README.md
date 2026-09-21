@@ -50,8 +50,7 @@ const verified = await verifier.verifyArtifact(
   'https://accounts.google.com',    // Expected OIDC issuer
   bundle,
   artifactData,
-  false,
-  policy // Optional VerificationPolicy
+  false
 );
 ```
 
@@ -59,27 +58,32 @@ const verified = await verifier.verifyArtifact(
 
 ```typescript
 const verifier = new SigstoreVerifier({
-  tlogThreshold: 1,   // Minimum transparency log entries required (default: 1)
-  ctlogThreshold: 1,  // Minimum SCTs required (default: 1)
-  tsaThreshold: 0,    // Minimum TSA timestamps required (default: 0)
+  tlogThreshold: 1,   // Minimum distinct log operators with a fully verified entry (default: 1)
+  ctlogThreshold: 1,  // Minimum distinct CT log operators with a verified SCT (default: 1)
+  tsaThreshold: 0,    // Minimum distinct TSA operators with a verified timestamp (default: 0)
 });
 ```
+
+Thresholds must be non-negative safe integers. Authorities without `operator` metadata can satisfy a threshold of one, but never add to the count of named operators. Thresholds above one require that many distinct, explicitly named operators.
+
+When `isDigestOnly` is `true`, supply exactly 32 bytes containing the artifact's SHA-256 digest.
 
 ## What Gets Verified
 
 The `verifyArtifact` method performs the following checks:
 
-1. **Identity Verification**: Certificate SAN matches the expected identity
-2. **Issuer Verification**: Certificate OIDC issuer matches the expected issuer
-3. **Certificate Chain**: Leaf certificate chains to a trusted Fulcio CA
-4. **SCT Verification**: Signed Certificate Timestamps from CT logs
-5. **Inclusion Promise/Proof**: Rekor transparency log inclusion
-6. **Merkle Tree Verification**: Inclusion proof validation (for v0.2+ bundles)
-7. **TLog Body Verification**: Entry body matches bundle content
-8. **TSA Timestamp Verification**: RFC 3161 timestamp verification (if configured)
-9. **Signature Verification**: Artifact signature using certificate's public key
+1. **Bundle Validation**: Structure, a 16 MiB aggregate encoded-data limit, bounded certificate chains and a supported media type
+2. **Identity Verification**: Certificate SAN matches the expected identity
+3. **Issuer Verification**: Certificate OIDC issuer matches the expected issuer
+4. **Transparency Log**: Every entry from a trusted Rekor log is verified (inclusion promise, Merkle proof, checkpoint, body and logged certificate); the threshold counts distinct log operators
+5. **TSA Timestamp Verification**: RFC 3161 timestamps (if present); the threshold counts distinct operators
+6. **Observer Timestamps**: At least one verified integrated time or TSA timestamp must anchor the signature
+7. **Certificate Chain**: Leaf certificate chains to a Fulcio CA that was trusted at every observer timestamp
+8. **SCT Verification**: Signed Certificate Timestamps from CT logs; the threshold counts distinct operators
+9. **Signature Verification**: Artifact signature using the certificate's public key
 
-`verifyArtifact` accepts an optional `VerificationPolicy` as the last argument to enforce custom certificate claim checks.
+Use `verifyArtifactPolicy(policy, bundle, artifactData, isDigestOnly)` to enforce a custom `VerificationPolicy`, including the required identity and issuer checks.
+Policies may be synchronous or asynchronous; asynchronous policies are awaited before verification continues.
 
 ## Development
 
