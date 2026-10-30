@@ -11,18 +11,18 @@
  * - Adds verifyDSSE002Body() - new functionality (reference only supports v0.0.1)
  */
 
-// Shape of the Rekor v2 dsse_v002 entry spec, validated field by field below.
-type DsseV002Spec = {
-  payloadHash?: { algorithm?: string; digest?: string };
-  signatures?: { content?: string; verifier?: { x509Certificate?: { rawBytes?: string } } }[];
-};
-
 import { base64ToUint8Array, hexToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
 
 import type { SigstoreBundle } from "../bundle.js";
 import { getHashAlgorithm } from "../interfaces.js";
 import type { X509Certificate } from "../x509/cert.js";
 import { assertLoggedCertificate, type RekorEntry } from "./body.js";
+
+// Shape of the Rekor v2 dsse_v002 entry spec, validated field by field below.
+type DsseV002Spec = {
+  payloadHash?: { algorithm?: string; digest?: string };
+  signatures?: { content?: string; verifier?: { x509Certificate?: { rawBytes?: string } } }[];
+};
 
 interface DSSESpec {
   signatures?: Array<{
