@@ -1,4 +1,4 @@
-export type { MessageSignature, RFC3161Timestamp,SigstoreBundle, TimestampVerificationData, TLogEntry, VerificationMaterial } from "./bundle.js";
+export type { MessageSignature, RFC3161Timestamp, SigstoreBundle, TimestampVerificationData, TLogEntry, VerificationMaterial } from "./bundle.js";
 export {
   CertificateError,
   PolicyError,
@@ -7,7 +7,7 @@ export {
   TLogError,
   VerificationError,
 } from "./errors.js";
-export type { RawTimestampAuthority,Sigstore, TrustedRoot } from "./interfaces.js";
+export type { RawTimestampAuthority, Sigstore, TrustedRoot } from "./interfaces.js";
 export type { VerificationPolicy } from "./policy.js";
 export {
   AllOf,
@@ -38,7 +38,7 @@ export {
 } from "./policy.js";
 export type { SigstoreVerifierOptions } from "./sigstore.js";
 export { SigstoreVerifier } from "./sigstore.js";
-export { verifyBundleTimestamp,verifyRFC3161Timestamp } from "./timestamp/tsa.js";
+export { verifyBundleTimestamp, verifyRFC3161Timestamp } from "./timestamp/tsa.js";
 export { TrustedRootProvider, type TrustedRootProviderOptions } from "./trust/tuf.js";
 export {
   EXTENSION_OID_BUILD_CONFIG_DIGEST,

@@ -1,4 +1,4 @@
-import { describe, expect,it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { assertBundle } from "./bundle.js";
 import { SigstoreVerifier } from "./sigstore.js";
