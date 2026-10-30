@@ -7,7 +7,7 @@
  * Reference: https://github.com/freedomofpress/tuf-browser
  */
 
-import { Uint8ArrayToString } from "@freedomofpress/crypto-browser";
+import { base64Decode, Uint8ArrayToString } from "@freedomofpress/crypto-browser";
 import type { TUFClient } from "@freedomofpress/tuf-browser";
 
 import { TrustedRoot } from "../interfaces.js";
@@ -145,10 +145,7 @@ export class TrustedRootProvider {
     // This is the root of trust for TUF, not to be confused with the Sigstore trusted root
     const { default: tufRootBase64 } = await import('./tuf-root.js');
 
-    // Decode from base64 to get the actual root.json content
-    const decoder = new TextDecoder();
-    const rootBytes = Uint8Array.from(atob(tufRootBase64), c => c.charCodeAt(0));
-    return decoder.decode(rootBytes);
+    return base64Decode(tufRootBase64);
   }
 
   /**

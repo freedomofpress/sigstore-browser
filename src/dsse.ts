@@ -1,4 +1,4 @@
-import { concatBytes } from "@freedomofpress/crypto-browser";
+import { concatBytes, stringToUint8Array } from "@freedomofpress/crypto-browser";
 /*
 Copyright 2023 The Sigstore Authors.
 
@@ -29,10 +29,8 @@ export function preAuthEncoding(
     "",
   ].join(" ");
 
-  // DSSE spec requires ASCII encoding for the prefix
-  // TextEncoder will throw if the string contains non-ASCII characters
-  const encoder = new TextEncoder();
-  const prefixBuffer = encoder.encode(prefix);
+  // DSSE requires an ASCII prefix.
+  const prefixBuffer = stringToUint8Array(prefix);
 
   // Verify all characters are ASCII (< 128)
   for (let i = 0; i < prefixBuffer.length; i++) {

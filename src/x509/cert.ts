@@ -13,14 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import {
-  ASN1Obj,
-  importKey,
-  toDER,
-  uint8ArrayEqual,
-  Uint8ArrayToBase64,
-  verifySignature,
-} from "@freedomofpress/crypto-browser";
+import { ASN1Obj, importKey, toDER, uint8ArrayEqual, Uint8ArrayToBase64, Uint8ArrayToString, verifySignature } from "@freedomofpress/crypto-browser";
 
 import { KeyTypes } from "../interfaces.js";
 import { DEFAULT_HASH_ALGORITHM, ECDSA_CURVE_NAMES, ECDSA_SIGNATURE_ALGOS, OID_RSASSA_PSS, RSA_SIGNATURE_ALGOS, SHA2_HASH_ALGOS } from "../oid.js";
@@ -557,7 +550,7 @@ export class X509Certificate {
             const oid = oidObj.toOID();
             const attrName = DN_OID_TO_NAME[oid];
             if (attrName) {
-              const value = new TextDecoder().decode(valueObj.value);
+              const value = Uint8ArrayToString(valueObj.value);
               result.set(attrName, value);
             }
           }
