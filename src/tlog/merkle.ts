@@ -9,8 +9,9 @@ Key differences:
 - uint8ArrayEqual from crypto-browser instead of Node.js crypto.timingSafeEqual
 */
 import { base64ToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
-import { HashAlgorithms } from "../interfaces.js";
+
 import type { TLogEntry } from "../bundle.js";
+import { HashAlgorithms } from "../interfaces.js";
 
 const RFC6962_LEAF_HASH_PREFIX = new Uint8Array([0x00]);
 const RFC6962_NODE_HASH_PREFIX = new Uint8Array([0x01]);

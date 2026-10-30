@@ -14,10 +14,11 @@
  */
 
 import { base64ToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
-import { assertTimestampVerificationData } from "../bundle.js";
-import { CertificateChainVerifier, X509Certificate } from "../x509/index.js";
+
+import { assertTimestampVerificationData, type TimestampVerificationData } from "../bundle.js";
 import { parseValidityPeriod, RawTimestampAuthority } from "../interfaces.js";
 import { RFC3161Timestamp } from "../rfc3161/index.js";
+import { CertificateChainVerifier, X509Certificate } from "../x509/index.js";
 
 /**
  * Verifies an RFC3161 timestamp against a set of timestamp authorities
@@ -170,7 +171,7 @@ async function verifyTimestampForCA(
  * @throws Error if any timestamp fails verification or duplicates are found
  */
 export async function verifyBundleTimestamp(
-  timestampData: any,
+  timestampData: TimestampVerificationData | undefined,
   signature: Uint8Array,
   timestampAuthorities: RawTimestampAuthority[]
 ): Promise<VerifiedTimestamp[]> {

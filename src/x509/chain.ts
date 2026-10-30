@@ -27,6 +27,7 @@ limitations under the License.
  */
 
 import { uint8ArrayEqual } from "@freedomofpress/crypto-browser";
+
 import { X509Certificate } from "./cert.js";
 
 interface CertificateChainVerifierOptions {
@@ -120,7 +121,7 @@ export class CertificateChainVerifier {
   private async findIssuer(
     certificate: X509Certificate
   ): Promise<X509Certificate[]> {
-    let issuers: X509Certificate[] = [];
+    const issuers: X509Certificate[] = [];
     let keyIdentifier: Uint8Array | undefined;
 
     if (uint8ArrayEqual(certificate.subject, certificate.issuer)) {
@@ -159,7 +160,7 @@ export class CertificateChainVerifier {
         if (await certificate.verify(issuer)) {
           verifiedIssuers.push(issuer);
         }
-      } catch (ex) {
+      } catch {
         // Ignore verification failures
       }
     }
