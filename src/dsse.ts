@@ -1,3 +1,4 @@
+import { concatBytes } from "@freedomofpress/crypto-browser";
 /*
 Copyright 2023 The Sigstore Authors.
 
@@ -40,10 +41,5 @@ export function preAuthEncoding(
     }
   }
 
-  // Concatenate prefix and payload
-  const combinedArray = new Uint8Array(prefixBuffer.length + payload.length);
-
-  combinedArray.set(prefixBuffer, 0);
-  combinedArray.set(payload, prefixBuffer.length);
-  return combinedArray;
+  return concatBytes(prefixBuffer, payload);
 }
