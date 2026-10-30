@@ -26,7 +26,7 @@ import {
   TrustedRoot,
 } from "./interfaces.js";
 import type { VerificationPolicy } from "./policy.js";
-import { AllOf, AnyOf, Identity,OIDCIssuer, OIDCIssuerV2 } from "./policy.js";
+import { AllOf, AnyOf, Identity, OIDCIssuer, OIDCIssuerV2 } from "./policy.js";
 import { verifyBundleTimestamp } from "./timestamp/tsa.js";
 import { verifyTLogBody } from "./tlog/body.js";
 import { verifyCheckpoint } from "./tlog/checkpoint.js";
