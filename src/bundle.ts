@@ -79,7 +79,7 @@ export interface DSSESignature {
 }
 
 export interface TimestampVerificationData {
-  rfc3161Timestamps: RFC3161Timestamp[];
+  rfc3161Timestamps?: RFC3161Timestamp[];
 }
 
 export interface RFC3161Timestamp {
@@ -123,7 +123,7 @@ function check(cond: unknown, what: string): asserts cond {
 function checkTimestampVerificationData(
   data: unknown,
   isBoundedStr: (v: unknown) => v is string,
-): void {
+): asserts data is TimestampVerificationData | undefined {
   if (data == null) return;
   check(isObj(data), "timestampVerificationData");
   const ts = data.rfc3161Timestamps;
@@ -134,7 +134,7 @@ function checkTimestampVerificationData(
 }
 
 // Lives in verifyBundleTimestamp(), which every caller routes through.
-export function assertTimestampVerificationData(data: unknown): void {
+export function assertTimestampVerificationData(data: unknown): asserts data is TimestampVerificationData | undefined {
   checkTimestampVerificationData(data, boundedStrings());
 }
 
