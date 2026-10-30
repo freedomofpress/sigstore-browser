@@ -9,6 +9,7 @@ import {
   Uint8ArrayToHex,
   Uint8ArrayToString,
 } from "@freedomofpress/crypto-browser";
+
 import { SigstoreBundle } from "./bundle.js";
 import { TrustedRoot } from "./interfaces.js";
 import { SigstoreVerifier } from "./sigstore.js";

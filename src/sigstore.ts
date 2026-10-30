@@ -10,15 +10,10 @@ import {
   verifySignature,
   verifySignatureOverDigest,
 } from "@freedomofpress/crypto-browser";
-import { HashAlgorithms } from "./interfaces.js";
-import {
-  CertificateChainVerifier,
-  EXTENSION_OID_SCT,
-  X509Certificate,
-  X509SCTExtension,
-} from "./x509/index.js";
+
 import { assertBundle, SigstoreBundle, TLogEntry } from "./bundle.js";
 import { preAuthEncoding } from "./dsse.js";
+import { HashAlgorithms } from "./interfaces.js";
 import {
   CertAuthority,
   CTLog,
@@ -30,13 +25,19 @@ import {
   SigstoreRoots,
   TrustedRoot,
 } from "./interfaces.js";
-import { verifyMerkleInclusion } from "./tlog/merkle.js";
-import { verifyCheckpoint } from "./tlog/checkpoint.js";
-import { verifyTLogBody } from "./tlog/body.js";
-import { verifyBundleTimestamp } from "./timestamp/tsa.js";
-import { TrustedRootProvider } from "./trust/tuf.js";
 import type { VerificationPolicy } from "./policy.js";
-import { AnyOf, AllOf, OIDCIssuer, OIDCIssuerV2, Identity } from "./policy.js";
+import { AllOf, AnyOf, Identity,OIDCIssuer, OIDCIssuerV2 } from "./policy.js";
+import { verifyBundleTimestamp } from "./timestamp/tsa.js";
+import { verifyTLogBody } from "./tlog/body.js";
+import { verifyCheckpoint } from "./tlog/checkpoint.js";
+import { verifyMerkleInclusion } from "./tlog/merkle.js";
+import { TrustedRootProvider } from "./trust/tuf.js";
+import {
+  CertificateChainVerifier,
+  EXTENSION_OID_SCT,
+  X509Certificate,
+  X509SCTExtension,
+} from "./x509/index.js";
 
 const MEDIA_TYPE_BASE = "application/vnd.dev.sigstore.bundle";
 // Upper bounds on in-toto subjects and digests, matching sigstore-go.
@@ -151,7 +152,7 @@ export class SigstoreVerifier {
     leaf: X509Certificate,
     certificateAuthorities: CertAuthority[]
   ): Promise<X509Certificate[]> {
-    let lastError: any;
+    let lastError: unknown;
 
     for (const ca of certificateAuthorities) {
       // Check if this CA is valid for the given timestamp
@@ -171,7 +172,7 @@ export class SigstoreVerifier {
       }
     }
 
-    throw new Error(`Failed to verify certificate chain: ${lastError?.message || 'No valid CAs found'}`);
+    throw new Error(`Failed to verify certificate chain: ${lastError instanceof Error ? lastError.message : 'No valid CAs found'}`);
   }
 
   // Loads every Fulcio CA; verifyCertificateChain() selects CAs by the observer timestamp.

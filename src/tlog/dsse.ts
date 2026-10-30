@@ -11,9 +11,16 @@
  * - Adds verifyDSSE002Body() - new functionality (reference only supports v0.0.1)
  */
 
+// Shape of the Rekor v2 dsse_v002 entry spec, validated field by field below.
+type DsseV002Spec = {
+  payloadHash?: { algorithm?: string; digest?: string };
+  signatures?: { content?: string; verifier?: { x509Certificate?: { rawBytes?: string } } }[];
+};
+
 import { base64ToUint8Array, hexToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
-import { getHashAlgorithm } from "../interfaces.js";
+
 import type { SigstoreBundle } from "../bundle.js";
+import { getHashAlgorithm } from "../interfaces.js";
 import type { X509Certificate } from "../x509/cert.js";
 import { assertLoggedCertificate, type RekorEntry } from "./body.js";
 
@@ -112,7 +119,7 @@ async function verifyDSSE002Body(
     throw new Error("Bundle missing dsseEnvelope for DSSE v0.0.2 entry");
   }
 
-  const spec = (entry.spec as any).dsseV002;
+  const spec = (entry.spec as { dsseV002?: DsseV002Spec }).dsseV002;
   if (!spec) {
     throw new Error("DSSE v0.0.2 entry missing dsseV002 spec");
   }
@@ -123,6 +130,9 @@ async function verifyDSSE002Body(
   assertLoggedCertificate(cert, spec.signatures[0].verifier?.x509Certificate?.rawBytes, false);
 
   const tlogSig = spec.signatures[0].content;
+  if (typeof tlogSig !== "string") {
+    throw new Error("DSSE v0.0.2 entry signature missing content");
+  }
   const tlogSigBytes = base64ToUint8Array(tlogSig);
 
   if (bundle.dsseEnvelope.signatures.length === 0) {

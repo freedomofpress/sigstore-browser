@@ -26,7 +26,7 @@
     "test": "vitest run --config vite.config.playwright.ts",
     "test:node": "vitest run",
     "coverage": "vitest run --coverage",
-    "lint": "npx eslint . --fix && npx prettier --write ."
+    "lint": "eslint . --fix"
   },
   "keywords": [
     "sigstore",

@@ -9,6 +9,7 @@
 
 import { Uint8ArrayToString } from "@freedomofpress/crypto-browser";
 import type { TUFClient } from "@freedomofpress/tuf-browser";
+
 import { TrustedRoot } from "../interfaces.js";
 
 /**

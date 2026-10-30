@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 import { ASN1Obj, ByteStream, Uint8ArrayToString } from "@freedomofpress/crypto-browser";
+
 import { SignedCertificateTimestamp } from "./sct.js";
 
 // https://www.rfc-editor.org/rfc/rfc5280#section-4.1
