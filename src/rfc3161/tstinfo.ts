@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { ASN1Obj, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
+import { ASN1Obj, digest, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
 
 import { HashAlgorithms } from "../interfaces.js";
 import { SHA2_HASH_ALGOS } from "../oid.js";
@@ -59,13 +59,7 @@ export class TSTInfo {
                        hashAlg === "sha384" ? HashAlgorithms.SHA384 :
                        hashAlg === "sha512" ? HashAlgorithms.SHA512 : hashAlg;
 
-    const digest = await crypto.subtle.digest(
-      hashAlgName,
-      data as BufferSource,
-    );
-    if (
-      !uint8ArrayEqual(new Uint8Array(digest), this.messageImprintHashedMessage)
-    ) {
+    if (!uint8ArrayEqual(await digest(hashAlgName, data), this.messageImprintHashedMessage)) {
       throw new RFC3161TimestampVerificationError(
         "message imprint does not match artifact",
       );

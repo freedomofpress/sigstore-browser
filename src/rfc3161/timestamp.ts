@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { ASN1Obj, uint8ArrayEqual, verifySignature } from "@freedomofpress/crypto-browser";
+import { ASN1Obj, digest, uint8ArrayEqual, verifySignature } from "@freedomofpress/crypto-browser";
 
 import { HashAlgorithms } from "../interfaces.js";
 import { ECDSA_SIGNATURE_ALGOS, RSA_SIGNATURE_ALGOS, SHA2_HASH_ALGOS } from "../oid.js";
@@ -120,13 +120,10 @@ export class RFC3161Timestamp {
                        hashAlg === "sha384" ? HashAlgorithms.SHA384 :
                        hashAlg === "sha512" ? HashAlgorithms.SHA512 : hashAlg;
 
-    const tstInfoDigest = await crypto.subtle.digest(
-      hashAlgName,
-      this.tstInfo.raw as BufferSource,
-    );
+    const tstInfoDigest = await digest(hashAlgName, this.tstInfo.raw);
     const expectedDigest = this.messageDigestAttributeObj.subs[1].subs[0].value;
 
-    if (!uint8ArrayEqual(new Uint8Array(tstInfoDigest), expectedDigest)) {
+    if (!uint8ArrayEqual(tstInfoDigest, expectedDigest)) {
       throw new RFC3161TimestampVerificationError(
         "signed data does not match tstInfo",
       );

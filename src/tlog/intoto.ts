@@ -7,10 +7,9 @@
  * Key differences from sigstore-js:
  * - Browser-compatible: uses Uint8Array instead of Buffer for binary data
  * - Direct bundle field comparison instead of SignatureContent abstraction
- * - Uses crypto.subtle.digest for hash computation instead of Node.js crypto
  */
 
-import { base64Decode, base64ToUint8Array, hexToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
+import { base64Decode, base64ToUint8Array, digest, hexToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
 
 import type { SigstoreBundle } from "../bundle.js";
 import { getHashAlgorithm } from "../interfaces.js";
@@ -99,9 +98,7 @@ export async function verifyIntotoBody(
     const tlogHashBytes = hexToUint8Array(intotoEntry.spec.content.payloadHash.value);
 
     const payloadBytes = base64ToUint8Array(bundle.dsseEnvelope.payload);
-    const bundleHashBytes = new Uint8Array(
-      await crypto.subtle.digest(hashAlg, payloadBytes as BufferSource)
-    );
+    const bundleHashBytes = await digest(hashAlg, payloadBytes);
 
     if (!uint8ArrayEqual(tlogHashBytes, bundleHashBytes)) {
       throw new Error("Intoto payload hash mismatch between TLog entry and bundle");

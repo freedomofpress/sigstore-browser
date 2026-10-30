@@ -1,19 +1,7 @@
-import {
-  base64ToUint8Array,
-  ByteStream,
-  canonicalizeJCS,
-  importKey,
-  stringToUint8Array,
-  uint8ArrayEqual,
-  Uint8ArrayToHex,
-  Uint8ArrayToString,
-  verifySignature,
-  verifySignatureOverDigest,
-} from "@freedomofpress/crypto-browser";
+import { base64ToUint8Array, ByteStream, canonicalizeJCS, importKey, sha256, stringToUint8Array, uint8ArrayEqual, Uint8ArrayToHex, Uint8ArrayToString, verifySignature, verifySignatureOverDigest } from "@freedomofpress/crypto-browser";
 
 import { assertBundle, SigstoreBundle, TLogEntry } from "./bundle.js";
 import { preAuthEncoding } from "./dsse.js";
-import { HashAlgorithms } from "./interfaces.js";
 import {
   CertAuthority,
   CTLog,
@@ -271,9 +259,7 @@ export class SigstoreVerifier {
     const preCert = new ByteStream();
 
     // Calculate hash of the issuer's public key
-    const issuerId = new Uint8Array(
-      await crypto.subtle.digest(HashAlgorithms.SHA256, issuer.publicKey as BufferSource),
-    );
+    const issuerId = await sha256(issuer.publicKey);
     preCert.appendView(issuerId);
 
     // Re-encodes the certificate to DER after removing the SCT extension
@@ -470,9 +456,7 @@ export class SigstoreVerifier {
         artifactDigest = Uint8ArrayToHex(data);
       } else {
         // data is the file content, compute the digest
-        artifactDigest = Uint8ArrayToHex(
-          new Uint8Array(await crypto.subtle.digest(HashAlgorithms.SHA256, data as BufferSource))
-        );
+        artifactDigest = Uint8ArrayToHex(await sha256(data));
       }
 
       // Every subject must carry a bounded digest map; any one of them may match the artifact.
@@ -502,9 +486,7 @@ export class SigstoreVerifier {
     } else {
       // The bundle's message digest must be the digest of the artifact being verified.
       const { messageDigest } = bundle.messageSignature;
-      const digest = isDigestOnly
-        ? data
-        : new Uint8Array(await crypto.subtle.digest(HashAlgorithms.SHA256, data as BufferSource));
+      const digest = isDigestOnly ? data : await sha256(data);
       if (messageDigest.algorithm !== "SHA2_256" || !uint8ArrayEqual(digest, base64ToUint8Array(messageDigest.digest))) {
         throw new Error("Artifact digest does not match the bundle message digest");
       }

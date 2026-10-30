@@ -7,11 +7,10 @@
  * Key differences from sigstore-js:
  * - Browser-compatible: uses Uint8Array instead of Buffer for binary data
  * - Direct bundle field comparison instead of SignatureContent abstraction
- * - Uses crypto.subtle.digest for hash computation instead of Node.js crypto
  * - Adds verifyDSSE002Body() - new functionality (reference only supports v0.0.1)
  */
 
-import { base64ToUint8Array, hexToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
+import { base64ToUint8Array, digest, hexToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
 
 import type { SigstoreBundle } from "../bundle.js";
 import { getHashAlgorithm } from "../interfaces.js";
@@ -100,9 +99,7 @@ async function verifyDSSE001Body(
   const tlogHashBytes = hexToUint8Array(entry.spec.payloadHash.value);
 
   const payloadBytes = base64ToUint8Array(bundle.dsseEnvelope.payload);
-  const bundleHashBytes = new Uint8Array(
-    await crypto.subtle.digest(hashAlg, payloadBytes as BufferSource)
-  );
+  const bundleHashBytes = await digest(hashAlg, payloadBytes);
 
   if (!uint8ArrayEqual(tlogHashBytes, bundleHashBytes)) {
     throw new Error("DSSE payload hash mismatch between TLog entry and bundle");
@@ -153,9 +150,7 @@ async function verifyDSSE002Body(
   const tlogHashBytes = base64ToUint8Array(spec.payloadHash.digest);
 
   const payloadBytes = base64ToUint8Array(bundle.dsseEnvelope.payload);
-  const bundleHashBytes = new Uint8Array(
-    await crypto.subtle.digest(hashAlg, payloadBytes as BufferSource)
-  );
+  const bundleHashBytes = await digest(hashAlg, payloadBytes);
 
   if (!uint8ArrayEqual(tlogHashBytes, bundleHashBytes)) {
     throw new Error("DSSE payload hash mismatch between TLog entry and bundle (v0.0.2)");
