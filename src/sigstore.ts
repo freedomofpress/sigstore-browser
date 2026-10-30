@@ -1,7 +1,7 @@
 import {
   base64ToUint8Array,
   ByteStream,
-  canonicalize,
+  canonicalizeJCS,
   importKey,
   stringToUint8Array,
   uint8ArrayEqual,
@@ -326,7 +326,7 @@ export class SigstoreVerifier {
       throw new Error("Rekor key was not valid at the integrated time.");
     }
     const signed = stringToUint8Array(
-      canonicalize({
+      canonicalizeJCS({
         body: entry.canonicalizedBody,
         integratedTime,
         logIndex: Number(entry.logIndex),

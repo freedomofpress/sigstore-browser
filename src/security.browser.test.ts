@@ -1,4 +1,4 @@
-import { base64ToUint8Array, canonicalize, hexToUint8Array, Uint8ArrayToBase64, Uint8ArrayToHex } from "@freedomofpress/crypto-browser";
+import { base64ToUint8Array, canonicalizeJCS, hexToUint8Array, Uint8ArrayToBase64, Uint8ArrayToHex } from "@freedomofpress/crypto-browser";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -47,7 +47,7 @@ async function signedLog(): Promise<{ log: RawLog; entry: TLogEntry }> {
   const entry = bundle().verificationMaterial.tlogEntries[0];
   entry.logId = log.logId;
   delete entry.inclusionProof;
-  const signed = new TextEncoder().encode(canonicalize({
+  const signed = new TextEncoder().encode(canonicalizeJCS({
     body: entry.canonicalizedBody,
     integratedTime: Number(entry.integratedTime),
     logIndex: Number(entry.logIndex),
