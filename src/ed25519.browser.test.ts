@@ -22,6 +22,8 @@ describe("Fix 7: Ed25519 log keys without native WebCrypto support", () => {
   it("imports trusted root Ed25519 keys through the fallback and verifies a checkpoint", async () => {
     await expect(crypto.subtle.generateKey({ name: "Ed25519" }, false, ["sign", "verify"])).rejects.toThrow();
 
+    const { installEd25519Fallback } = await import("@freedomofpress/crypto-browser/noble");
+    await installEd25519Fallback();
     const { SigstoreVerifier } = await import("./sigstore.js");
     const { verifyCheckpoint } = await import("./tlog/checkpoint.js");
     const { Uint8ArrayToBase64 } = await import("@freedomofpress/crypto-browser");

@@ -66,7 +66,7 @@ const verifier = new SigstoreVerifier({
 
 Thresholds must be non-negative safe integers. Authorities without `operator` metadata can satisfy a threshold of one, but never add to the count of named operators. Thresholds above one require that many distinct, explicitly named operators.
 
-When `isDigestOnly` is `true`, supply exactly 32 bytes containing the artifact's SHA-256 digest.
+When `isDigestOnly` is `true`, supply exactly 32 bytes containing the artifact's SHA-256 digest and construct the verifier with `verifyDigest: verifySignatureOverDigest` from `@freedomofpress/crypto-browser/noble`. Verifiers that always have the artifact can leave it out, and their bundles do not carry `@noble/curves`.
 
 ## What Gets Verified
 
