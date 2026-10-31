@@ -1,4 +1,5 @@
 import { base64ToUint8Array, hexToUint8Array, Uint8ArrayToBase64, Uint8ArrayToHex } from "@freedomofpress/crypto-browser";
+import { verifySignatureOverDigest } from "@freedomofpress/crypto-browser/noble";
 import { describe, expect, it } from "vitest";
 
 import * as rekor2 from "../test/fixtures/rekor2.js";
@@ -19,7 +20,7 @@ const integratedTime = new Date(Number(bundle().verificationMaterial.tlogEntries
 const dayAfterSigning = new Date(integratedTime.getTime() + 86_400_000).toISOString();
 
 async function verifier(opts: SigstoreVerifierOptions = {}, root: TrustedRoot = trustRoot()) {
-  const v = new SigstoreVerifier(opts);
+  const v = new SigstoreVerifier({ verifyDigest: verifySignatureOverDigest, ...opts });
   await v.loadSigstoreRoot(root);
   return v;
 }
@@ -278,4 +279,11 @@ describe("Rekor v2 bundle with RFC 3161 timestamp", () => {
     c.verificationMaterial.certificate = bundle().verificationMaterial.certificate;
     await expect(verifyR2(c)).rejects.toThrow();
   });
+});
+
+it("rejects digest-only verification without the verifyDigest option", async () => {
+  const v = new SigstoreVerifier();
+  await v.loadSigstoreRoot(rekor2.trustRoot());
+  const r2digest = base64ToUint8Array(rekor2.digestB64);
+  await expect(v.verifyArtifact(rekor2.identity, rekor2.issuer, rekor2.bundle(), r2digest, true)).rejects.toThrow("verifyDigest");
 });

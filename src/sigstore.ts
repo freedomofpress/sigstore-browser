@@ -1,4 +1,4 @@
-import { base64ToUint8Array, ByteStream, canonicalizeJCS, importKey, sha256, stringToUint8Array, uint8ArrayEqual, Uint8ArrayToHex, Uint8ArrayToString, verifySignature, verifySignatureOverDigest } from "@freedomofpress/crypto-browser";
+import { base64ToUint8Array, ByteStream, canonicalizeJCS, importKey, sha256, stringToUint8Array, uint8ArrayEqual, Uint8ArrayToHex, Uint8ArrayToString, verifySignature } from "@freedomofpress/crypto-browser";
 
 import { assertBundle, SigstoreBundle, TLogEntry } from "./bundle.js";
 import { preAuthEncoding } from "./dsse.js";
@@ -70,16 +70,20 @@ export interface SigstoreVerifierOptions {
   tlogThreshold?: number;
   ctlogThreshold?: number;
   tsaThreshold?: number;
+  // Needed only for digest-only verification: verifySignatureOverDigest from "@freedomofpress/crypto-browser/noble".
+  verifyDigest?: (key: CryptoKey, digest: Uint8Array, signature: Uint8Array) => Promise<boolean>;
 }
 
 export class SigstoreVerifier {
   private root: Sigstore | undefined;
   private rawRoot: TrustedRoot | undefined;
-  private options: Required<SigstoreVerifierOptions>;
+  private options: Required<Omit<SigstoreVerifierOptions, "verifyDigest">>;
+  private verifyDigest: SigstoreVerifierOptions["verifyDigest"];
 
   constructor(options: SigstoreVerifierOptions = {}) {
     this.root = undefined;
     this.rawRoot = undefined;
+    this.verifyDigest = options.verifyDigest;
     this.options = {
       tlogThreshold: options.tlogThreshold ?? 1,
       ctlogThreshold: options.ctlogThreshold ?? 1,
@@ -493,9 +497,10 @@ export class SigstoreVerifier {
       const publicKey = await signingCert.publicKeyObj;
 
       if (isDigestOnly) {
-        // For hashedrekord bundles, verify signature over the digest directly.
-        // Uses the same elliptic.js workaround as sigstore-js conformance CLI.
-        const verified = await verifySignatureOverDigest(publicKey, data, signature);
+        if (!this.verifyDigest) {
+          throw new Error("Digest-only verification needs the verifyDigest option");
+        }
+        const verified = await this.verifyDigest(publicKey, data, signature);
         if (!verified) {
           throw new Error("Error verifying signature over digest");
         }

@@ -1,4 +1,5 @@
 import { base64ToUint8Array, canonicalizeJCS, hexToUint8Array, Uint8ArrayToBase64, Uint8ArrayToHex } from "@freedomofpress/crypto-browser";
+import { verifySignatureOverDigest } from "@freedomofpress/crypto-browser/noble";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -28,7 +29,7 @@ const verify = (v: SigstoreVerifier, b = bundle(), data = digest) =>
   v.verifyArtifact(identity, issuer, b, data, true);
 
 async function verifier(options: SigstoreVerifierOptions = {}) {
-  const v = new SigstoreVerifier(options);
+  const v = new SigstoreVerifier({ verifyDigest: verifySignatureOverDigest, ...options });
   await v.loadSigstoreRoot(trustRoot());
   return v;
 }
