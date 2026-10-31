@@ -1,0 +1,25 @@
+# .github/workflows/ci.yml
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - run: npm ci
+      - run: npx eslint .
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm test

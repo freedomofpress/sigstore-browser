@@ -9,6 +9,7 @@ import {
   Uint8ArrayToHex,
   Uint8ArrayToString,
 } from "@freedomofpress/crypto-browser";
+import { verifySignatureOverDigest } from "@freedomofpress/crypto-browser/noble";
 
 import { SigstoreBundle } from "./bundle.js";
 import { TrustedRoot } from "./interfaces.js";
@@ -201,7 +202,8 @@ async function verifyBundle(options: CLIOptions): Promise<void> {
     resolveArtifact(options.artifactInput),
   ]);
 
-  const verifier = new SigstoreVerifier();
+  // The conformance suite may hand us only a digest.
+  const verifier = new SigstoreVerifier({ verifyDigest: verifySignatureOverDigest });
   await verifier.loadSigstoreRoot(trustedRoot);
 
   // Extract and verify the artifact digest from the bundle
