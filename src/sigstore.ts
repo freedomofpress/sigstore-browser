@@ -42,27 +42,16 @@ function countOperators(operators: Set<string>): number {
  * Extract bundle version from mediaType string
  * Reference: https://github.com/sigstore/sigstore-go/blob/main/pkg/bundle/bundle.go#L159-L177
  */
-function getBundleVersion(mediaType: string): string {
-  switch (mediaType) {
-    case `${MEDIA_TYPE_BASE}+json;version=0.1`:
-      return "0.1";
-    case `${MEDIA_TYPE_BASE}+json;version=0.2`:
-      return "0.2";
-    case `${MEDIA_TYPE_BASE}+json;version=0.3`:
-      return "0.3";
-  }
+// Every bundle version this verifier implements. v0.1 may carry an inclusion promise without a proof.
+const BUNDLE_VERSIONS = ["0.1", "0.2", "0.3"];
 
-  // New format: "application/vnd.dev.sigstore.bundle.v0.3+json"
-  if (mediaType.startsWith(`${MEDIA_TYPE_BASE}.v`) && mediaType.endsWith("+json")) {
-    const version = mediaType
-      .replace(`${MEDIA_TYPE_BASE}.v`, "")
-      .replace("+json", "");
-    // Only the versions this verifier implements are accepted.
-    if (/^0\.[123]$/.test(version)) {
+function getBundleVersion(mediaType: string, enabled: readonly string[]): string {
+  for (const version of enabled) {
+    // Legacy "application/vnd.dev.sigstore.bundle+json;version=0.3" or current "application/vnd.dev.sigstore.bundle.v0.3+json".
+    if (mediaType === `${MEDIA_TYPE_BASE}+json;version=${version}` || mediaType === `${MEDIA_TYPE_BASE}.v${version}+json`) {
       return version;
     }
   }
-
   throw new Error(`Unsupported bundle media type: ${mediaType}`);
 }
 
@@ -70,6 +59,8 @@ export interface SigstoreVerifierOptions {
   tlogThreshold?: number;
   ctlogThreshold?: number;
   tsaThreshold?: number;
+  // Bundle versions to accept; defaults to 0.2 and 0.3. Add "0.1" to accept legacy bundles whose log entry carries only an inclusion promise.
+  bundleVersions?: string[];
   // Needed only for digest-only verification: verifySignatureOverDigest from "@freedomofpress/crypto-browser/noble".
   verifyDigest?: (key: CryptoKey, digest: Uint8Array, signature: Uint8Array) => Promise<boolean>;
 }
@@ -77,13 +68,18 @@ export interface SigstoreVerifierOptions {
 export class SigstoreVerifier {
   private root: Sigstore | undefined;
   private rawRoot: TrustedRoot | undefined;
-  private options: Required<Omit<SigstoreVerifierOptions, "verifyDigest">>;
+  private options: Required<Omit<SigstoreVerifierOptions, "verifyDigest" | "bundleVersions">>;
+  private bundleVersions: string[];
   private verifyDigest: SigstoreVerifierOptions["verifyDigest"];
 
   constructor(options: SigstoreVerifierOptions = {}) {
     this.root = undefined;
     this.rawRoot = undefined;
     this.verifyDigest = options.verifyDigest;
+    this.bundleVersions = options.bundleVersions ?? ["0.2", "0.3"];
+    if (!this.bundleVersions.length || this.bundleVersions.some((v) => !BUNDLE_VERSIONS.includes(v))) {
+      throw new Error(`bundleVersions must be a non-empty subset of ${BUNDLE_VERSIONS.join(", ")}`);
+    }
     this.options = {
       tlogThreshold: options.tlogThreshold ?? 1,
       ctlogThreshold: options.ctlogThreshold ?? 1,
@@ -339,7 +335,7 @@ export class SigstoreVerifier {
   ): Promise<Date[]> {
     const entries = bundle.verificationMaterial.tlogEntries;
     // Only v0.1 bundles may rely on an inclusion promise alone.
-    const requireProof = getBundleVersion(bundle.mediaType) !== "0.1";
+    const requireProof = getBundleVersion(bundle.mediaType, this.bundleVersions) !== "0.1";
     const operators = new Set<string>();
     const integratedTimes: Date[] = [];
 

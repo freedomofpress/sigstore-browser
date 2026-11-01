@@ -202,8 +202,8 @@ async function verifyBundle(options: CLIOptions): Promise<void> {
     resolveArtifact(options.artifactInput),
   ]);
 
-  // The conformance suite may hand us only a digest.
-  const verifier = new SigstoreVerifier({ verifyDigest: verifySignatureOverDigest });
+  // The conformance suite may hand us only a digest, and still carries v0.1 bundles.
+  const verifier = new SigstoreVerifier({ verifyDigest: verifySignatureOverDigest, bundleVersions: ["0.1", "0.2", "0.3"] });
   await verifier.loadSigstoreRoot(trustedRoot);
 
   // Extract and verify the artifact digest from the bundle

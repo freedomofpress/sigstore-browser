@@ -79,7 +79,7 @@ describe("Operator thresholds", () => {
     const b = bundle();
     b.mediaType = "application/vnd.dev.sigstore.bundle+json;version=0.1";
     b.verificationMaterial.tlogEntries = operators.map((_, i) => signedLogs[i].entry);
-    const v = new SigstoreVerifier({ tlogThreshold: threshold });
+    const v = new SigstoreVerifier({ tlogThreshold: threshold, bundleVersions: ["0.1", "0.2", "0.3"] });
     await v.loadSigstoreRoot(root);
     const result = verify(v, b);
     if (passes) await expect(result).resolves.toBe(true);
@@ -148,6 +148,13 @@ describe("Small input hardening", () => {
       }
       for (const value of [0, 1, 2]) expect(() => new SigstoreVerifier({ [key]: value })).not.toThrow();
     }
+  });
+
+  it("requires bundleVersions to be a non-empty subset of the implemented versions", () => {
+    for (const value of [[], ["0.4"], ["0.3", "1.0"], ["v0.3"]]) {
+      expect(() => new SigstoreVerifier({ bundleVersions: value })).toThrow("bundleVersions must be a non-empty subset");
+    }
+    expect(() => new SigstoreVerifier({ bundleVersions: ["0.1", "0.2", "0.3"] })).not.toThrow();
   });
 
   it("rejects digest-only inputs that are not 32 bytes", async () => {
