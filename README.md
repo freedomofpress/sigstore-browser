@@ -15,7 +15,7 @@ This is a browser-compatible alternative to [sigstore-js](https://github.com/sig
 - **Browser-First**: Designed for web browsers using the Web Crypto API
 - **TUF Integration**: Secure trusted root updates via [The Update Framework](https://theupdateframework.io/)
 - **Policy Verification**: Flexible identity and claim verification adapted from sigstore-python
-- **Multiple Bundle Formats**: Supports Sigstore bundle versions 0.1, 0.2, and 0.3
+- **Multiple Bundle Formats**: Supports Sigstore bundle versions 0.2 and 0.3 by default, and 0.1 when enabled
 - **Multiple Key Types**: RSA, ECDSA, and Ed25519 signature verification via Web Crypto API
 - **Minimal Dependencies**: Only depends on [@freedomofpress/crypto-browser](https://github.com/freedomofpress/crypto-browser), [@freedomofpress/tuf-browser](https://github.com/freedomofpress/tuf-browser), and [@noble/curves](https://github.com/paulmillr/noble-curves)
 
@@ -61,6 +61,7 @@ const verifier = new SigstoreVerifier({
   tlogThreshold: 1,   // Minimum distinct log operators with a fully verified entry (default: 1)
   ctlogThreshold: 1,  // Minimum distinct CT log operators with a verified SCT (default: 1)
   tsaThreshold: 0,    // Minimum distinct TSA operators with a verified timestamp (default: 0)
+  bundleVersions: ["0.2", "0.3"], // Accepted bundle versions; add "0.1" for legacy bundles that carry only an inclusion promise (default: ["0.2", "0.3"])
 });
 ```
 

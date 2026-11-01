@@ -179,12 +179,16 @@ describe("Bundle media type and structure", () => {
     return b;
   };
 
-  it("accepts only bundle versions 0.1 to 0.3", async () => {
-    for (const mt of ["application/x-garbage", "APPLICATION/VND.DEV.SIGSTORE.BUNDLE.V0.3+JSON", "", "application/vnd.dev.sigstore.bundle.v0.4+json", "application/vnd.dev.sigstore.bundle.v1.0+json"]) {
+  it("accepts only enabled bundle versions, 0.2 and 0.3 by default", async () => {
+    for (const mt of ["application/x-garbage", "APPLICATION/VND.DEV.SIGSTORE.BUNDLE.V0.3+JSON", "", "application/vnd.dev.sigstore.bundle.v0.4+json", "application/vnd.dev.sigstore.bundle.v1.0+json", "application/vnd.dev.sigstore.bundle+json;version=0.1"]) {
       await expect(verify(proofless(mt))).rejects.toThrow("Unsupported bundle media type");
     }
     await expect(verify(proofless("application/vnd.dev.sigstore.bundle.v0.3+json"))).rejects.toThrow("requires an inclusion proof");
-    await expect(verify(proofless("application/vnd.dev.sigstore.bundle+json;version=0.1"))).resolves.toBe(true);
+    await expect(verify(bundle(), { bundleVersions: ["0.2"] })).rejects.toThrow("Unsupported bundle media type");
+    // Only an explicitly enabled v0.1 may rely on the inclusion promise alone; later versions never may.
+    const legacy = { bundleVersions: ["0.1", "0.2", "0.3"] };
+    await expect(verify(proofless("application/vnd.dev.sigstore.bundle+json;version=0.1"), legacy)).resolves.toBe(true);
+    await expect(verify(proofless("application/vnd.dev.sigstore.bundle.v0.3+json"), legacy)).rejects.toThrow("requires an inclusion proof");
   });
 
   it("rejects a bundle carrying both a message signature and a DSSE envelope", async () => {
