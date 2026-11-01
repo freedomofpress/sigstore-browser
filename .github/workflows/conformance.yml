@@ -23,6 +23,11 @@ jobs:
       - run: npm run build
       - run: chmod +x dist/cli.js
 
+      # sigstore-conformance v0.0.21 pins a pydantic-core that cannot build on the runner's default Python 3.14.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
       - uses: sigstore/sigstore-conformance@v0.0.21
         with:
           entrypoint: dist/cli.js
