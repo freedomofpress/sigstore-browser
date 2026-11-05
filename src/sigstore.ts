@@ -573,10 +573,12 @@ public async verifyArtifact(
       throw new Error("DSSE signature verification failed");
     }
 
-    // (8) Every entry MUST be of type "dsse" for DSSE verification
+    // (8) Every entry MUST record the envelope: a dsse entry, or a Rekor v2 hashedrekord 0.0.2 entry
+    // (envelope signature + PAE hash), which verifyTLogBody already checked against the envelope.
     for (const entry of bundle.verificationMaterial.tlogEntries) {
-      if (entry.kindVersion.kind !== "dsse") {
-        throw new Error(`Expected entry type dsse, got ${entry.kindVersion.kind}`);
+      const { kind, version } = entry.kindVersion;
+      if (kind !== "dsse" && !(kind === "hashedrekord" && version === "0.0.2")) {
+        throw new Error(`Expected entry type dsse or hashedrekord 0.0.2, got ${kind} ${version}`);
       }
     }
 
