@@ -10,9 +10,11 @@
  * - Adds verifyHashedRekordV002Body() - new functionality (reference only supports v0.0.1)
  */
 
-import { base64ToUint8Array, hexToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
+import { base64ToUint8Array, digest, hexToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
 
 import type { SigstoreBundle } from "../bundle.js";
+import { preAuthEncoding } from "../dsse.js";
+import { getHashAlgorithm } from "../interfaces.js";
 import type { X509Certificate } from "../x509/cert.js";
 import { assertLoggedCertificate, type RekorEntry } from "./body.js";
 
@@ -104,33 +106,38 @@ function verifyHashedRekordV001Body(
 }
 
 // New functionality for HashedRekord v0.0.2 (not in sigstore-js reference, which only supports v0.0.1)
-function verifyHashedRekordV002Body(
+// Rekor v2 logs DSSE bundles as hashedrekord too: the entry then holds the envelope signature and the
+// hash of the envelope's PAE (same reconstruction as sigstore-go's verify/tlog.go).
+async function verifyHashedRekordV002Body(
   entry: HashedRekordEntry,
   bundle: SigstoreBundle,
   cert: X509Certificate,
-): void {
+): Promise<void> {
   const spec = (entry.spec as HashedRekordV002Spec).hashedRekordV002;
-  if (!bundle.messageSignature) {
-    throw new Error("Bundle missing messageSignature for hashedrekord v0.0.2 entry");
-  }
   assertLoggedCertificate(cert, spec?.signature?.verifier?.x509Certificate?.rawBytes, false);
+
+  let bundleSigB64: string;
+  let bundleDigestBytes: Uint8Array;
+  if (bundle.messageSignature) {
+    bundleSigB64 = bundle.messageSignature.signature;
+    bundleDigestBytes = base64ToUint8Array(bundle.messageSignature.messageDigest.digest);
+  } else if (bundle.dsseEnvelope) {
+    const env = bundle.dsseEnvelope;
+    bundleSigB64 = env.signatures[0].sig;
+    const pae = preAuthEncoding(env.payloadType, base64ToUint8Array(env.payload));
+    bundleDigestBytes = await digest(getHashAlgorithm(spec.data.algorithm), pae);
+  } else {
+    throw new Error("Bundle missing messageSignature or dsseEnvelope for hashedrekord v0.0.2 entry");
+  }
 
   // NOTE: HashedRekord v0.0.2 uses single base64 encoding (unlike intoto which is double-encoded)
   // Verified against Sigstore conformance test suite bundles
-  const tlogSig = spec.signature.content || "";
-  const tlogSigBytes = base64ToUint8Array(tlogSig);
-  const bundleSigBytes = base64ToUint8Array(bundle.messageSignature.signature);
-
-  if (!uint8ArrayEqual(tlogSigBytes, bundleSigBytes)) {
+  const tlogSigBytes = base64ToUint8Array(spec.signature.content || "");
+  if (!uint8ArrayEqual(tlogSigBytes, base64ToUint8Array(bundleSigB64))) {
     throw new Error("Signature mismatch between TLog entry and bundle (v0.0.2)");
   }
 
-  const tlogDigest = spec.data.digest || "";
-  const tlogDigestBytes = base64ToUint8Array(tlogDigest);
-  const bundleDigestBytes = base64ToUint8Array(
-    bundle.messageSignature.messageDigest.digest
-  );
-
+  const tlogDigestBytes = base64ToUint8Array(spec.data.digest || "");
   if (!uint8ArrayEqual(tlogDigestBytes, bundleDigestBytes)) {
     throw new Error("Digest mismatch between TLog entry and bundle (v0.0.2)");
   }

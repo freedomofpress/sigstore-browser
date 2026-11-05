@@ -3,6 +3,7 @@ import { verifySignatureOverDigest } from "@freedomofpress/crypto-browser/noble"
 import { describe, expect, it } from "vitest";
 
 import * as rekor2 from "../test/fixtures/rekor2.js";
+import * as rekor2dsse from "../test/fixtures/rekor2-dsse.js";
 import { bundle, digestHex, identity, issuer, trustRoot } from "../test/fixtures/sigstore.js";
 import type { SigstoreBundle, TLogEntry } from "./bundle.js";
 import type { TrustedRoot } from "./interfaces.js";
@@ -290,4 +291,32 @@ it("rejects digest-only verification without the verifyDigest option", async () 
   await v.loadSigstoreRoot(rekor2.trustRoot());
   const r2digest = base64ToUint8Array(rekor2.digestB64);
   await expect(v.verifyArtifact(rekor2.identity, rekor2.issuer, rekor2.bundle(), r2digest, true)).rejects.toThrow("verifyDigest");
+});
+
+describe("Rekor v2 DSSE bundle logged as hashedrekord 0.0.2", () => {
+  const r2policy = new AllOf([new Identity({ identity: rekor2dsse.identity }), new OIDCIssuerV2(rekor2dsse.issuer)]);
+  const cert = () => X509Certificate.parse(base64ToUint8Array(rekor2dsse.bundle().verificationMaterial.certificate?.rawBytes ?? ""));
+  const env = (b: SigstoreBundle) => b.dsseEnvelope ?? { payload: "", payloadType: "", signatures: [{ sig: "" }] };
+
+  it("verifies the envelope against the PAE hash and signature recorded in the entry", async () => {
+    const v = await verifier({}, rekor2dsse.trustRoot());
+    const { payloadType, payload } = await v.verifyDsse(rekor2dsse.bundle(), r2policy);
+    expect(payloadType).toBe("application/vnd.in-toto+json");
+    const statement = JSON.parse(new TextDecoder().decode(payload));
+    expect(statement.subject[0].digest.sha256).toBe(rekor2dsse.subjectDigestHex);
+  });
+
+  it("hashes the PAE, not the bare payload, and rejects a digest or signature mismatch", async () => {
+    const b = rekor2dsse.bundle();
+    const entry = b.verificationMaterial.tlogEntries[0];
+    await expect(verifyTLogBody(entry, b, cert())).resolves.toBeUndefined();
+
+    const otherType = rekor2dsse.bundle();
+    env(otherType).payloadType = "application/octet-stream";
+    await expect(verifyTLogBody(entry, otherType, cert())).rejects.toThrow("Digest mismatch between TLog entry and bundle (v0.0.2)");
+
+    const otherSig = rekor2dsse.bundle();
+    env(otherSig).signatures[0].sig = Uint8ArrayToBase64(new Uint8Array(64));
+    await expect(verifyTLogBody(entry, otherSig, cert())).rejects.toThrow("Signature mismatch between TLog entry and bundle (v0.0.2)");
+  });
 });
