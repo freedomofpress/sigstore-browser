@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { assertBundle } from "./bundle.js";
+import { assertBundle, assertNoDuplicateKeys, parseBundle } from "./bundle.js";
 import { SigstoreVerifier } from "./sigstore.js";
 import { X509Certificate } from "./x509/cert.js";
 
@@ -279,6 +279,34 @@ describe("Bundle structural validation", () => {
 
   it("accepts a well-formed bundle", () => {
     expect(() => assertBundle(bundle())).not.toThrow();
+  });
+
+  it("accepts only the canonical protobuf JSON encoding", () => {
+    rejects((b) => { (b as Record<string, unknown>).extra = 1; }, 'unknown field "extra" in bundle');
+    rejects((b) => { (b.verificationMaterial as Record<string, unknown>).tlog_entries = []; }, 'unknown field "tlog_entries"');
+    rejects((b) => { (b.verificationMaterial.tlogEntries[0].kindVersion as Record<string, unknown>).zzz = 1; }, "kindVersion");
+    rejects((b) => { (b.dsseEnvelope.signatures[0] as Record<string, unknown>).publicKey = "x"; }, 'unknown field "publicKey"');
+    rejects((b) => { b.verificationMaterial.certificate.rawBytes = "AA"; }, "certificate");       // unpadded
+    rejects((b) => { b.verificationMaterial.certificate.rawBytes = "AA==\n"; }, "certificate");   // whitespace
+    rejects((b) => { b.verificationMaterial.certificate.rawBytes = "AB=="; }, "certificate");     // non-zero trailing bits
+    rejects((b) => { b.verificationMaterial.certificate.rawBytes = "-_8="; }, "certificate");     // URL-safe alphabet
+    rejects((b) => { b.verificationMaterial.tlogEntries[0].logId.keyId = "AA"; }, "tlog entry");
+    rejects((b) => { b.dsseEnvelope.payload = "AA"; }, "dsseEnvelope");
+    rejects((b) => { b.dsseEnvelope.signatures[0].sig = "A A=="; }, "exactly one signature");
+    rejects((b) => { b.verificationMaterial.tlogEntries[0].inclusionPromise.signedEntryTimestamp = "AA"; }, "inclusion promise");
+    expect(() => assertBundle({ ...bundle(), verificationMaterial: { ...bundle().verificationMaterial, publicKey: { hint: "k" } } })).not.toThrow();
+  });
+
+  it("parseBundle rejects duplicate keys wherever they appear", () => {
+    const text = JSON.stringify(bundle());
+    expect(parseBundle(text)).toEqual(bundle());
+    expect(() => parseBundle(text.replace("{", '{"mediaType":"x",'))).toThrow('duplicate key "mediaType"');
+    expect(() => parseBundle(text.replace('"kind":"dsse"', '"kind":"dsse","kind":"dsse"'))).toThrow('duplicate key "kind"');
+    expect(() => parseBundle(text.replace('"sig":"AA=="', '"sig":"AA==","sig":"AA=="'))).toThrow('duplicate key "sig"');
+    expect(() => parseBundle(text.replace("{", '{"media\\u0054ype":"x",'))).toThrow('duplicate key "mediaType"');
+    // Strings that look like keys, escaped quotes and colons inside values do not confuse the scan.
+    expect(() => assertNoDuplicateKeys('{"a": "{\\"a\\": 1, \\"a\\": 2}", "b": ["a", "a", {"a": "x:y"}], "c": {"a": 1}}')).not.toThrow();
+    expect(() => assertNoDuplicateKeys('{"a": [{"x": 1, "x": 2}]}')).toThrow("duplicate key");
   });
 
   it("rejects malformed fields, empty promises and missing integrated times", () => {
