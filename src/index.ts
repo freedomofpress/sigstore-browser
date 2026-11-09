@@ -1,4 +1,5 @@
 export type { MessageSignature, RFC3161Timestamp, SigstoreBundle, TimestampVerificationData, TLogEntry, VerificationMaterial } from "./bundle.js";
+export { assertBundle, assertNoDuplicateKeys, parseBundle } from "./bundle.js";
 export {
   CertificateError,
   PolicyError,

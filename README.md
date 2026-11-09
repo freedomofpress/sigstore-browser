@@ -41,8 +41,9 @@ await verifier.loadSigstoreRootWithTUF();
 // Or load a trusted root directly
 // await verifier.loadSigstoreRoot(trustedRootJson);
 
-// Verify an artifact
-const bundle = JSON.parse(bundleJsonString);
+// Parse the bundle: only canonical protobuf JSON is accepted (lowerCamelCase names, int64 as
+// strings, padded standard base64, no unknown fields or duplicate keys)
+const bundle = parseBundle(bundleJsonString);
 const artifactData = new Uint8Array(/* artifact bytes */);
 
 const verified = await verifier.verifyArtifact(
