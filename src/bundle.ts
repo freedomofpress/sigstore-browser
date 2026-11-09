@@ -119,10 +119,10 @@ const isCanonicalBase64 = (s: string): boolean => {
   try { return btoa(atob(s)) === s; } catch { return false; }
 };
 
-// Protobuf log indices, tree sizes and times are non-negative int64 values.
-// Bound the string before BigInt conversion to avoid unbounded arithmetic.
+// Protobuf log indices, tree sizes and times are non-negative int64 values, printed by protojson
+// as decimal strings without leading zeros. Bound the string before BigInt conversion.
 const isInt64 = (v: unknown): v is string =>
-  isStr(v) && /^\d{1,19}$/.test(v) && BigInt(v) <= 9223372036854775807n;
+  isStr(v) && /^\d{1,19}$/.test(v) && BigInt(v) <= 9223372036854775807n && String(BigInt(v)) === v;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const isObj = (v: unknown): v is Record<string, any> => typeof v === "object" && v !== null;
@@ -165,6 +165,8 @@ export function assertBundle(b: unknown): asserts b is SigstoreBundle {
   const root = fields(b, "bundle", ["mediaType", "verificationMaterial", "messageSignature", "dsseEnvelope"]);
   check(isBoundedStr(root.mediaType) && isObj(root.verificationMaterial), "missing mediaType or verificationMaterial");
   const vm = fields(root.verificationMaterial, "verificationMaterial", ["publicKey", "x509CertificateChain", "certificate", "tlogEntries", "timestampVerificationData"]);
+  // protobuf oneof: protojson rejects two members at parse time, so do we.
+  check(["publicKey", "x509CertificateChain", "certificate"].filter((k) => vm[k] !== undefined).length === 1, "exactly one of publicKey, x509CertificateChain or certificate");
   const certs = vm.certificate ? [vm.certificate] : fields(vm.x509CertificateChain ?? {}, "x509CertificateChain", ["certificates"]).certificates;
   check(Array.isArray(certs) && certs.length > 0 && certs.length <= 32, "certificate");
   for (const c of certs) check(isB64(fields(c, "certificate", ["rawBytes"]).rawBytes), "certificate");

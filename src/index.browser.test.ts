@@ -294,7 +294,12 @@ describe("Bundle structural validation", () => {
     rejects((b) => { b.dsseEnvelope.payload = "AA"; }, "dsseEnvelope");
     rejects((b) => { b.dsseEnvelope.signatures[0].sig = "A A=="; }, "exactly one signature");
     rejects((b) => { b.verificationMaterial.tlogEntries[0].inclusionPromise.signedEntryTimestamp = "AA"; }, "inclusion promise");
-    expect(() => assertBundle({ ...bundle(), verificationMaterial: { ...bundle().verificationMaterial, publicKey: { hint: "k" } } })).not.toThrow();
+    rejects((b) => { b.verificationMaterial.tlogEntries[0].logIndex = "0001"; }, "tlog entry");
+    rejects((b) => { b.verificationMaterial.tlogEntries[0].logIndex = ""; }, "tlog entry");
+    expect(() => assertBundle({ ...bundle(), verificationMaterial: { ...bundle().verificationMaterial, tlogEntries: [{ ...entry, logIndex: "0" }] } })).not.toThrow();
+    rejects((b) => { (b.verificationMaterial as Record<string, unknown>).publicKey = { hint: "k" }; }, "exactly one of publicKey");
+    rejects((b) => { (b.verificationMaterial as Record<string, unknown>).x509CertificateChain = { certificates: [] }; }, "exactly one of publicKey");
+    rejects((b) => { (b as Record<string, unknown>).messageSignature = { signature: "AA==", messageDigest: { algorithm: "SHA2_256", digest: "AA==" } }; }, "exactly one of messageSignature");
   });
 
   it("parseBundle rejects duplicate keys wherever they appear", () => {
