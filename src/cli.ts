@@ -4,6 +4,7 @@ import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
+  base64Decode,
   base64ToUint8Array,
   hexToUint8Array,
   Uint8ArrayToHex,
@@ -26,6 +27,8 @@ interface CLIOptions {
   certificateIdentity: string;
   certificateOidcIssuer: string;
   trustedRootPath: string | undefined;
+  // Take trust material from the staging Sigstore instance instead of production.
+  staging: boolean;
   artifactInput: string;
 }
 
@@ -88,6 +91,13 @@ function parseArgs(argv: string[]): CLIOptions {
           options.trustedRootPath = value;
           break;
         }
+        case "--staging": {
+          if (providedValue !== undefined) {
+            throw new Error("--staging takes no value");
+          }
+          options.staging = true;
+          break;
+        }
         default:
           throw new Error(`Unknown option: ${name}`);
       }
@@ -133,6 +143,7 @@ function parseArgs(argv: string[]): CLIOptions {
     certificateIdentity: options.certificateIdentity,
     certificateOidcIssuer: options.certificateOidcIssuer,
     trustedRootPath: options.trustedRootPath,
+    staging: options.staging ?? false,
     artifactInput,
   };
 }
@@ -175,12 +186,21 @@ async function resolveArtifact(input: string): Promise<ArtifactInput> {
 
 async function loadTrustedRoot(
   pathInput: string | undefined,
+  staging: boolean,
 ): Promise<TrustedRoot> {
+  // An explicit --trusted-root wins; --staging only selects which TUF repository is used.
   if (!pathInput) {
-    // Use TUF to fetch the latest trusted root (matches sigstore-js behavior)
+    const baseUrl = staging
+      ? "https://tuf-repo-cdn.sigstage.dev"
+      : "https://tuf-repo-cdn.sigstore.dev";
+    // Staging is a separate instance with its own bootstrap root.
+    const rootModule = staging
+      ? await import("./trust/staging-root.js")
+      : await import("./trust/tuf-root.js");
     const tufProvider = new TrustedRootProvider({
-      metadataUrl: "https://tuf-repo-cdn.sigstore.dev/",
-      targetBaseUrl: "https://tuf-repo-cdn.sigstore.dev/targets/",
+      metadataUrl: `${baseUrl}/`,
+      targetBaseUrl: `${baseUrl}/targets/`,
+      initialRoot: base64Decode(rootModule.default),
     });
     return await tufProvider.getTrustedRoot();
   }
@@ -197,7 +217,7 @@ async function loadBundle(bundlePath: string): Promise<SigstoreBundle> {
 
 async function verifyBundle(options: CLIOptions): Promise<void> {
   const [trustedRoot, bundle, artifact] = await Promise.all([
-    loadTrustedRoot(options.trustedRootPath),
+    loadTrustedRoot(options.trustedRootPath, options.staging),
     loadBundle(options.bundlePath),
     resolveArtifact(options.artifactInput),
   ]);
