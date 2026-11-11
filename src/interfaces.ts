@@ -5,12 +5,13 @@ export function parseValidityPeriod(
 ): { start: Date; end: Date } {
   if (
     typeof validity?.start !== "string" ||
-    (validity.end !== undefined && typeof validity.end !== "string")
+    (validity.end != null && typeof validity.end !== "string")
   ) {
     throw new Error("Invalid authority validity period");
   }
+  // TimeRange.end is an optional protobuf Timestamp, so protojson may encode an absent end as null.
   const start = new Date(validity.start);
-  const end = validity.end === undefined
+  const end = validity.end == null
     ? new Date(8640000000000000)
     : new Date(validity.end);
   if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || start > end) {
@@ -48,7 +49,7 @@ export interface RawTimestampAuthority {
   };
   validFor: {
     start: string;
-    end?: string;
+    end?: string | null;
   };
   operator?: string;
 }
@@ -96,7 +97,7 @@ export interface RawLog {
     keyDetails: string;
     validFor: {
       start: string;
-      end?: string;
+      end?: string | null;
     };
   };
   logId: {
@@ -120,7 +121,7 @@ export interface RawCA {
   };
   validFor: {
     start: string;
-    end?: string;
+    end?: string | null;
   };
 }
 

@@ -118,7 +118,7 @@ describe("Small input hardening", () => {
       .rejects.toThrow("0 of 1 policies succeeded");
   });
 
-  it("rejects malformed authority validity periods while loading the root", async () => {
+  it("validates authority validity periods while loading the root", async () => {
     for (let i = 0; i < 4; i++) {
       const root = trustRoot();
       const periods = [
@@ -139,6 +139,17 @@ describe("Small input hardening", () => {
     };
     await expect(new SigstoreVerifier().loadSigstoreRoot(root))
       .rejects.toThrow("Invalid authority validity period");
+
+    // TimeRange.end is an optional protobuf Timestamp, so protojson may encode an absent end as
+    // null; sigstore-conformance's trust-root-tlog-validity-end-inclusive vector ships that shape.
+    const nulled = trustRoot();
+    nulled.tlogs[0].publicKey.validFor.end = null;
+    nulled.ctlogs[0].publicKey.validFor.end = null;
+    nulled.certificateAuthorities[0].validFor.end = null;
+    nulled.timestampAuthorities[0].validFor.end = null;
+    const v = await verifier();
+    await v.loadSigstoreRoot(nulled);
+    await expect(v.verifyArtifact(identity, issuer, bundle(), digest, true)).resolves.toBe(true);
   });
 
   it("requires non-negative safe-integer thresholds", () => {
