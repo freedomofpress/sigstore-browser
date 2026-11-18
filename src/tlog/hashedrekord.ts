@@ -16,8 +16,8 @@ import type { SigstoreBundle } from "../bundle.js";
 import { preAuthEncoding } from "../dsse.js";
 import { fail } from "../errors.js";
 import { getHashAlgorithm } from "../interfaces.js";
-import type { X509Certificate } from "../x509/cert.js";
-import { assertLoggedCertificate, type RekorEntry } from "./body.js";
+import { ManagedPublicKey } from "../key.js";
+import { assertLoggedSigner, assertLoggedV2Verifier, type LogSigner, type RekorEntry, type V2Verifier } from "./body.js";
 
 interface HashedRekordSpec {
   signature: {
@@ -44,11 +44,7 @@ interface HashedRekordV002Spec {
   hashedRekordV002: {
     signature: {
       content: string;
-      verifier?: {
-        x509Certificate?: {
-          rawBytes: string;
-        };
-      };
+      verifier?: V2Verifier;
     };
     data: {
       algorithm: string;
@@ -60,15 +56,15 @@ interface HashedRekordV002Spec {
 export async function verifyHashedRekordBody(
   entry: RekorEntry,
   bundle: SigstoreBundle,
-  cert: X509Certificate,
+  signer: LogSigner,
 ): Promise<void> {
   const hashedRekordEntry = entry as HashedRekordEntry;
 
   switch (hashedRekordEntry.apiVersion) {
     case "0.0.1":
-      return verifyHashedRekordV001Body(hashedRekordEntry, bundle, cert);
+      return verifyHashedRekordV001Body(hashedRekordEntry, bundle, signer);
     case "0.0.2":
-      return verifyHashedRekordV002Body(hashedRekordEntry, bundle, cert);
+      return verifyHashedRekordV002Body(hashedRekordEntry, bundle, signer);
     default:
       fail("tlog-entry-kind", `Unsupported hashedrekord version: ${hashedRekordEntry.apiVersion}`);
   }
@@ -77,13 +73,13 @@ export async function verifyHashedRekordBody(
 function verifyHashedRekordV001Body(
   entry: HashedRekordEntry,
   bundle: SigstoreBundle,
-  cert: X509Certificate,
+  signer: LogSigner,
 ): void {
   const spec = entry.spec as HashedRekordSpec;
   if (!bundle.messageSignature) {
     fail("tlog-entry-kind", "Bundle missing messageSignature for hashedrekord entry");
   }
-  assertLoggedCertificate(cert, spec.signature?.publicKey?.content, true);
+  assertLoggedSigner(signer, spec.signature?.publicKey?.content);
 
   const tlogSig = spec.signature.content || "";
   const tlogSigBytes = base64ToUint8Array(tlogSig);
@@ -93,7 +89,7 @@ function verifyHashedRekordV001Body(
     fail("tlog-signature-mismatch", "Signature mismatch between TLog entry and bundle");
   }
 
-  const tlogDigest = spec.data.hash?.value || "";
+  const tlogDigest = spec.data?.hash?.value || "";
   const tlogDigestBytes = hexToUint8Array(tlogDigest);
   const bundleDigestBytes = base64ToUint8Array(
     bundle.messageSignature.messageDigest.digest
@@ -110,10 +106,31 @@ function verifyHashedRekordV001Body(
 async function verifyHashedRekordV002Body(
   entry: HashedRekordEntry,
   bundle: SigstoreBundle,
-  cert: X509Certificate,
+  signer: LogSigner,
 ): Promise<void> {
   const spec = (entry.spec as HashedRekordV002Spec).hashedRekordV002;
-  assertLoggedCertificate(cert, spec?.signature?.verifier?.x509Certificate?.rawBytes, false);
+  assertLoggedV2Verifier(signer, spec?.signature?.verifier);
+
+  // A managed key fixes the digest: its key details name the algorithm, which fixes the length.
+  if (signer instanceof ManagedPublicKey) {
+    const keyDetails = spec.signature.verifier?.keyDetails;
+    const details = ManagedPublicKey.curveForKeyDetails(keyDetails);
+    const loggedAlgorithm = spec.data?.algorithm;
+    const expectedAlgorithm = details?.digestAlgorithm;
+    if (loggedAlgorithm !== expectedAlgorithm) {
+      const algorithmName = String(loggedAlgorithm);
+      const detailsName = String(keyDetails);
+      const message = `digest algorithm ${algorithmName} does not match key details ${detailsName}`;
+      fail("tlog-digest-algorithm-mismatch", message);
+    }
+    const loggedDigest = base64ToUint8Array(spec.data.digest || "");
+    const length = loggedDigest.length;
+    const expectedLength = details?.digestLength;
+    if (length !== expectedLength) {
+      const message = `${spec.data.algorithm} digest is ${length} bytes, expected ${expectedLength}`;
+      fail("tlog-digest-malformed", message);
+    }
+  }
 
   let bundleSigB64: string;
   let bundleDigestBytes: Uint8Array;
@@ -132,7 +149,8 @@ async function verifyHashedRekordV002Body(
   // NOTE: HashedRekord v0.0.2 uses single base64 encoding (unlike intoto which is double-encoded)
   // Verified against Sigstore conformance test suite bundles
   const tlogSigBytes = base64ToUint8Array(spec.signature.content || "");
-  if (!uint8ArrayEqual(tlogSigBytes, base64ToUint8Array(bundleSigB64))) {
+  const bundleSigBytes = base64ToUint8Array(bundleSigB64);
+  if (!uint8ArrayEqual(tlogSigBytes, bundleSigBytes)) {
     fail("tlog-signature-mismatch", "Signature mismatch between TLog entry and bundle (v0.0.2)");
   }
 

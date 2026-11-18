@@ -15,13 +15,12 @@ import { base64ToUint8Array, digest, hexToUint8Array, uint8ArrayEqual } from "@f
 import type { SigstoreBundle } from "../bundle.js";
 import { fail } from "../errors.js";
 import { getHashAlgorithm } from "../interfaces.js";
-import type { X509Certificate } from "../x509/cert.js";
-import { assertLoggedCertificate, type RekorEntry } from "./body.js";
+import { assertLoggedSigner, assertLoggedV2Verifier, type LogSigner, type RekorEntry, type V2Verifier } from "./body.js";
 
 // Shape of the Rekor v2 dsse_v002 entry spec, validated field by field below.
 type DsseV002Spec = {
   payloadHash?: { algorithm?: string; digest?: string };
-  signatures?: { content?: string; verifier?: { x509Certificate?: { rawBytes?: string } } }[];
+  signatures?: { content?: string; verifier?: V2Verifier }[];
 };
 
 interface DSSESpec {
@@ -49,15 +48,15 @@ interface DSSEEntry extends RekorEntry {
 export async function verifyDSSEBody(
   entry: RekorEntry,
   bundle: SigstoreBundle,
-  cert: X509Certificate,
+  signer: LogSigner,
 ): Promise<void> {
   const dsseEntry = entry as DSSEEntry;
 
   switch (dsseEntry.apiVersion) {
     case "0.0.1":
-      return verifyDSSE001Body(dsseEntry, bundle, cert);
+      return verifyDSSE001Body(dsseEntry, bundle, signer);
     case "0.0.2":
-      return verifyDSSE002Body(dsseEntry, bundle, cert);
+      return verifyDSSE002Body(dsseEntry, bundle, signer);
     default:
       fail("tlog-entry-kind", `Unsupported dsse version: ${dsseEntry.apiVersion}`);
   }
@@ -66,7 +65,7 @@ export async function verifyDSSEBody(
 async function verifyDSSE001Body(
   entry: DSSEEntry,
   bundle: SigstoreBundle,
-  cert: X509Certificate,
+  signer: LogSigner,
 ): Promise<void> {
   if (!bundle.dsseEnvelope) {
     fail("tlog-entry-kind", "Bundle missing dsseEnvelope for DSSE entry");
@@ -75,7 +74,7 @@ async function verifyDSSE001Body(
   if (!entry.spec.signatures || entry.spec.signatures.length !== 1) {
     fail("tlog-entry-malformed", "DSSE entry must have exactly one signature");
   }
-  assertLoggedCertificate(cert, entry.spec.signatures[0].verifier, true);
+  assertLoggedSigner(signer, entry.spec.signatures[0].verifier);
 
   const tlogSig = entry.spec.signatures[0].signature;
   const tlogSigBytes = base64ToUint8Array(tlogSig);
@@ -109,7 +108,7 @@ async function verifyDSSE001Body(
 async function verifyDSSE002Body(
   entry: DSSEEntry,
   bundle: SigstoreBundle,
-  cert: X509Certificate,
+  signer: LogSigner,
 ): Promise<void> {
   if (!bundle.dsseEnvelope) {
     fail("tlog-entry-kind", "Bundle missing dsseEnvelope for DSSE v0.0.2 entry");
@@ -123,7 +122,7 @@ async function verifyDSSE002Body(
   if (!spec.signatures || spec.signatures.length !== 1) {
     fail("tlog-entry-malformed", "DSSE v0.0.2 entry must have exactly one signature");
   }
-  assertLoggedCertificate(cert, spec.signatures[0].verifier?.x509Certificate?.rawBytes, false);
+  assertLoggedV2Verifier(signer, spec.signatures[0].verifier);
 
   const tlogSig = spec.signatures[0].content;
   if (typeof tlogSig !== "string") {
