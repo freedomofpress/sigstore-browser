@@ -12,6 +12,7 @@
 import { base64Decode, base64ToUint8Array, Uint8ArrayToString } from "@freedomofpress/crypto-browser";
 
 import type { SigstoreBundle, TLogEntry } from "../bundle.js";
+import { fail } from "../errors.js";
 import { X509Certificate } from "../x509/cert.js";
 import { verifyDSSEBody } from "./dsse.js";
 import { verifyHashedRekordBody } from "./hashedrekord.js";
@@ -34,8 +35,9 @@ export async function verifyTLogBody(
   const { kind, version } = entry.kindVersion;
 
   if (kind !== rekorEntry.kind || version !== rekorEntry.apiVersion) {
-    throw new Error(
-      `kind/version mismatch - expected: ${kind}/${version}, received: ${rekorEntry.kind}/${rekorEntry.apiVersion}`
+    fail(
+      "tlog-entry-malformed",
+      `kind/version mismatch - expected: ${kind}/${version}, received: ${rekorEntry.kind}/${rekorEntry.apiVersion}`,
     );
   }
 
@@ -47,7 +49,7 @@ export async function verifyTLogBody(
     case "intoto":
       return verifyIntotoBody(rekorEntry, bundle, cert);
     default:
-      throw new Error(`Unsupported TLog entry kind: ${rekorEntry.kind}`);
+      fail("tlog-entry-kind", `Unsupported TLog entry kind: ${rekorEntry.kind}`);
   }
 }
 
@@ -78,8 +80,9 @@ function parseCanonicalBody(entry: TLogEntry): RekorEntry {
 
     return rekorEntry;
   } catch (error) {
-    throw new Error(
-      `Failed to parse canonicalized body: ${error instanceof Error ? error.message : String(error)}`
+    fail(
+      "tlog-entry-malformed",
+      `Failed to parse canonicalized body: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 }

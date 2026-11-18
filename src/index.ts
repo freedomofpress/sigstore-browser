@@ -2,6 +2,8 @@ export type { MessageSignature, RFC3161Timestamp, SigstoreBundle, TimestampVerif
 export {
   CertificateError,
   PolicyError,
+  REASON_CODES,
+  type ReasonCode,
   SignatureError,
   TimestampError,
   TLogError,

@@ -13,6 +13,7 @@
 import { base64ToUint8Array, digest, hexToUint8Array, uint8ArrayEqual } from "@freedomofpress/crypto-browser";
 
 import type { SigstoreBundle } from "../bundle.js";
+import { fail } from "../errors.js";
 import { getHashAlgorithm } from "../interfaces.js";
 import type { X509Certificate } from "../x509/cert.js";
 import { assertLoggedCertificate, type RekorEntry } from "./body.js";
@@ -58,9 +59,7 @@ export async function verifyDSSEBody(
     case "0.0.2":
       return verifyDSSE002Body(dsseEntry, bundle, cert);
     default:
-      throw new Error(
-        `Unsupported dsse version: ${dsseEntry.apiVersion}`
-      );
+      fail("tlog-entry-kind", `Unsupported dsse version: ${dsseEntry.apiVersion}`);
   }
 }
 
@@ -70,11 +69,11 @@ async function verifyDSSE001Body(
   cert: X509Certificate,
 ): Promise<void> {
   if (!bundle.dsseEnvelope) {
-    throw new Error("Bundle missing dsseEnvelope for DSSE entry");
+    fail("tlog-entry-kind", "Bundle missing dsseEnvelope for DSSE entry");
   }
 
   if (!entry.spec.signatures || entry.spec.signatures.length !== 1) {
-    throw new Error("DSSE entry must have exactly one signature");
+    fail("tlog-entry-malformed", "DSSE entry must have exactly one signature");
   }
   assertLoggedCertificate(cert, entry.spec.signatures[0].verifier, true);
 
@@ -88,11 +87,11 @@ async function verifyDSSE001Body(
   const bundleSigBytes = base64ToUint8Array(bundle.dsseEnvelope.signatures[0].sig);
 
   if (!uint8ArrayEqual(tlogSigBytes, bundleSigBytes)) {
-    throw new Error("DSSE signature mismatch between TLog entry and bundle");
+    fail("tlog-signature-mismatch", "DSSE signature mismatch between TLog entry and bundle");
   }
 
   if (!entry.spec.payloadHash?.value || !entry.spec.payloadHash?.algorithm) {
-    throw new Error("DSSE entry missing payloadHash or algorithm");
+    fail("tlog-entry-malformed", "DSSE entry missing payloadHash or algorithm");
   }
 
   const hashAlg = getHashAlgorithm(entry.spec.payloadHash.algorithm);
@@ -102,7 +101,7 @@ async function verifyDSSE001Body(
   const bundleHashBytes = await digest(hashAlg, payloadBytes);
 
   if (!uint8ArrayEqual(tlogHashBytes, bundleHashBytes)) {
-    throw new Error("DSSE payload hash mismatch between TLog entry and bundle");
+    fail("tlog-digest-mismatch", "DSSE payload hash mismatch between TLog entry and bundle");
   }
 }
 
@@ -113,22 +112,22 @@ async function verifyDSSE002Body(
   cert: X509Certificate,
 ): Promise<void> {
   if (!bundle.dsseEnvelope) {
-    throw new Error("Bundle missing dsseEnvelope for DSSE v0.0.2 entry");
+    fail("tlog-entry-kind", "Bundle missing dsseEnvelope for DSSE v0.0.2 entry");
   }
 
   const spec = (entry.spec as { dsseV002?: DsseV002Spec }).dsseV002;
   if (!spec) {
-    throw new Error("DSSE v0.0.2 entry missing dsseV002 spec");
+    fail("tlog-entry-malformed", "DSSE v0.0.2 entry missing dsseV002 spec");
   }
 
   if (!spec.signatures || spec.signatures.length !== 1) {
-    throw new Error("DSSE v0.0.2 entry must have exactly one signature");
+    fail("tlog-entry-malformed", "DSSE v0.0.2 entry must have exactly one signature");
   }
   assertLoggedCertificate(cert, spec.signatures[0].verifier?.x509Certificate?.rawBytes, false);
 
   const tlogSig = spec.signatures[0].content;
   if (typeof tlogSig !== "string") {
-    throw new Error("DSSE v0.0.2 entry signature missing content");
+    fail("tlog-entry-malformed", "DSSE v0.0.2 entry signature missing content");
   }
   const tlogSigBytes = base64ToUint8Array(tlogSig);
 
@@ -139,11 +138,11 @@ async function verifyDSSE002Body(
   const bundleSigBytes = base64ToUint8Array(bundle.dsseEnvelope.signatures[0].sig);
 
   if (!uint8ArrayEqual(tlogSigBytes, bundleSigBytes)) {
-    throw new Error("DSSE signature mismatch between TLog entry and bundle (v0.0.2)");
+    fail("tlog-signature-mismatch", "DSSE signature mismatch between TLog entry and bundle (v0.0.2)");
   }
 
   if (!spec.payloadHash?.digest || !spec.payloadHash?.algorithm) {
-    throw new Error("DSSE v0.0.2 entry missing payloadHash or algorithm");
+    fail("tlog-entry-malformed", "DSSE v0.0.2 entry missing payloadHash or algorithm");
   }
 
   const hashAlg = getHashAlgorithm(spec.payloadHash.algorithm);
@@ -153,6 +152,6 @@ async function verifyDSSE002Body(
   const bundleHashBytes = await digest(hashAlg, payloadBytes);
 
   if (!uint8ArrayEqual(tlogHashBytes, bundleHashBytes)) {
-    throw new Error("DSSE payload hash mismatch between TLog entry and bundle (v0.0.2)");
+    fail("tlog-digest-mismatch", "DSSE payload hash mismatch between TLog entry and bundle (v0.0.2)");
   }
 }

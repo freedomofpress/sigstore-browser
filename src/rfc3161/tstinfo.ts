@@ -62,6 +62,7 @@ export class TSTInfo {
     if (!uint8ArrayEqual(await digest(hashAlgName, data), this.messageImprintHashedMessage)) {
       throw new RFC3161TimestampVerificationError(
         "message imprint does not match artifact",
+        "timestamp-message-mismatch",
       );
     }
   }

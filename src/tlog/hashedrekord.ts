@@ -14,6 +14,7 @@ import { base64ToUint8Array, digest, hexToUint8Array, uint8ArrayEqual } from "@f
 
 import type { SigstoreBundle } from "../bundle.js";
 import { preAuthEncoding } from "../dsse.js";
+import { fail } from "../errors.js";
 import { getHashAlgorithm } from "../interfaces.js";
 import type { X509Certificate } from "../x509/cert.js";
 import { assertLoggedCertificate, type RekorEntry } from "./body.js";
@@ -69,9 +70,7 @@ export async function verifyHashedRekordBody(
     case "0.0.2":
       return verifyHashedRekordV002Body(hashedRekordEntry, bundle, cert);
     default:
-      throw new Error(
-        `Unsupported hashedrekord version: ${hashedRekordEntry.apiVersion}`
-      );
+      fail("tlog-entry-kind", `Unsupported hashedrekord version: ${hashedRekordEntry.apiVersion}`);
   }
 }
 
@@ -82,7 +81,7 @@ function verifyHashedRekordV001Body(
 ): void {
   const spec = entry.spec as HashedRekordSpec;
   if (!bundle.messageSignature) {
-    throw new Error("Bundle missing messageSignature for hashedrekord entry");
+    fail("tlog-entry-kind", "Bundle missing messageSignature for hashedrekord entry");
   }
   assertLoggedCertificate(cert, spec.signature?.publicKey?.content, true);
 
@@ -91,7 +90,7 @@ function verifyHashedRekordV001Body(
   const bundleSigBytes = base64ToUint8Array(bundle.messageSignature.signature);
 
   if (!uint8ArrayEqual(tlogSigBytes, bundleSigBytes)) {
-    throw new Error("Signature mismatch between TLog entry and bundle");
+    fail("tlog-signature-mismatch", "Signature mismatch between TLog entry and bundle");
   }
 
   const tlogDigest = spec.data.hash?.value || "";
@@ -101,7 +100,7 @@ function verifyHashedRekordV001Body(
   );
 
   if (!uint8ArrayEqual(tlogDigestBytes, bundleDigestBytes)) {
-    throw new Error("Digest mismatch between TLog entry and bundle");
+    fail("tlog-digest-mismatch", "Digest mismatch between TLog entry and bundle");
   }
 }
 
@@ -127,18 +126,18 @@ async function verifyHashedRekordV002Body(
     const pae = preAuthEncoding(env.payloadType, base64ToUint8Array(env.payload));
     bundleDigestBytes = await digest(getHashAlgorithm(spec.data.algorithm), pae);
   } else {
-    throw new Error("Bundle missing messageSignature or dsseEnvelope for hashedrekord v0.0.2 entry");
+    fail("content-unsupported", "Bundle missing messageSignature or dsseEnvelope for hashedrekord v0.0.2 entry");
   }
 
   // NOTE: HashedRekord v0.0.2 uses single base64 encoding (unlike intoto which is double-encoded)
   // Verified against Sigstore conformance test suite bundles
   const tlogSigBytes = base64ToUint8Array(spec.signature.content || "");
   if (!uint8ArrayEqual(tlogSigBytes, base64ToUint8Array(bundleSigB64))) {
-    throw new Error("Signature mismatch between TLog entry and bundle (v0.0.2)");
+    fail("tlog-signature-mismatch", "Signature mismatch between TLog entry and bundle (v0.0.2)");
   }
 
   const tlogDigestBytes = base64ToUint8Array(spec.data.digest || "");
   if (!uint8ArrayEqual(tlogDigestBytes, bundleDigestBytes)) {
-    throw new Error("Digest mismatch between TLog entry and bundle (v0.0.2)");
+    fail("tlog-digest-mismatch", "Digest mismatch between TLog entry and bundle (v0.0.2)");
   }
 }
