@@ -14,5 +14,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
+    globalSetup: ["test/corpus/setup.ts"],
+    testTimeout: 120_000,
   },
 });

@@ -10,12 +10,18 @@ export type SigstoreBundle =
 export interface VerificationMaterial {
   certificate?: Certificate;
   x509CertificateChain?: X509CertificateChain;
+  // Managed-key bundles name their key only by an optional, unauthenticated hint.
+  publicKey?: PublicKeyIdentifier;
   tlogEntries: TLogEntry[];
   timestampVerificationData?: TimestampVerificationData;
 }
 
 export interface Certificate {
   rawBytes: string; // Base64-encoded certificate bytes
+}
+
+export interface PublicKeyIdentifier {
+  hint?: string;
 }
 
 export interface X509CertificateChain {
@@ -139,14 +145,29 @@ export function assertTimestampVerificationData(data: unknown): asserts data is 
 }
 
 // Structural validation of a parsed bundle, replacing the compile-time-only type with runtime checks.
-// Entry count is capped at 32 like sigstore-go does.
-export function assertBundle(b: unknown): asserts b is SigstoreBundle {
+// Entry count is capped at 32 like sigstore-go does. `material` selects the verification material the
+// caller needs: a certificate (the default), or a managed key, which must be the only material present.
+export function assertBundle(
+  b: unknown,
+  material: "certificate" | "publicKey" = "certificate",
+): asserts b is SigstoreBundle {
   const isBoundedStr = boundedStrings();
   check(isObj(b) && isBoundedStr(b.mediaType) && isObj(b.verificationMaterial), "missing mediaType or verificationMaterial");
   const vm = b.verificationMaterial;
 
-  const certs = vm.certificate ? [vm.certificate] : vm.x509CertificateChain?.certificates;
-  check(Array.isArray(certs) && certs.length > 0 && certs.length <= 32 && certs.every((c: unknown) => isObj(c) && isBoundedStr(c.rawBytes)), "certificate");
+  if (material === "publicKey") {
+    const hasCertificate = vm.certificate !== undefined || vm.x509CertificateChain !== undefined;
+    const hasPublicKey = !hasCertificate && isObj(vm.publicKey);
+    let hasValidHint = false;
+    if (hasPublicKey) {
+      const hint = vm.publicKey.hint;
+      hasValidHint = hint === undefined || isBoundedStr(hint);
+    }
+    check(hasValidHint, "publicKey");
+  } else {
+    const certs = vm.certificate ? [vm.certificate] : vm.x509CertificateChain?.certificates;
+    check(Array.isArray(certs) && certs.length > 0 && certs.length <= 32 && certs.every((c: unknown) => isObj(c) && isBoundedStr(c.rawBytes)), "certificate");
+  }
 
   check(Array.isArray(vm.tlogEntries) && vm.tlogEntries.length > 0 && vm.tlogEntries.length <= 32, "tlogEntries");
   for (const e of vm.tlogEntries) {

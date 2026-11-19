@@ -13,4 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-export class RFC3161TimestampVerificationError extends Error {}
+import type { ReasonCode } from "../errors.js";
+
+// `code` says which check failed: the imprint (another message) or the signature over the token.
+export class RFC3161TimestampVerificationError extends Error {
+  constructor(message: string, public code: ReasonCode = "timestamp-malformed") {
+    super(message);
+  }
+}

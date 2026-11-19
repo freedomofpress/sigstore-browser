@@ -1,6 +1,6 @@
-import { base64ToUint8Array, ByteStream, canonicalizeJCS, importKey, sha256, stringToUint8Array, uint8ArrayEqual, Uint8ArrayToHex, Uint8ArrayToString, verifySignature } from "@freedomofpress/crypto-browser";
+import { base64ToUint8Array, ByteStream, importKey, sha256, uint8ArrayEqual, Uint8ArrayToHex, Uint8ArrayToString, verifySignature } from "@freedomofpress/crypto-browser";
 
-import { assertBundle, SigstoreBundle, TLogEntry } from "./bundle.js";
+import { assertBundle, SigstoreBundle } from "./bundle.js";
 import { preAuthEncoding } from "./dsse.js";
 import {
   CertAuthority,
@@ -19,6 +19,7 @@ import { verifyBundleTimestamp } from "./timestamp/tsa.js";
 import { verifyTLogBody } from "./tlog/body.js";
 import { verifyCheckpoint } from "./tlog/checkpoint.js";
 import { verifyMerkleInclusion } from "./tlog/merkle.js";
+import { verifyInclusionPromise } from "./tlog/set.js";
 import { TrustedRootProvider } from "./trust/tuf.js";
 import {
   CertificateChainVerifier,
@@ -33,7 +34,7 @@ const MAX_SUBJECTS = 1024;
 const MAX_SUBJECT_DIGESTS = 32;
 
 // Unknown operators can satisfy threshold one, but add no independence to named operators.
-function countOperators(operators: Set<string>): number {
+export function countOperators(operators: Set<string>): number {
   if (operators.size === 0) return 0;
   return Math.max(1, operators.size - (operators.has("") ? 1 : 0));
 }
@@ -43,9 +44,9 @@ function countOperators(operators: Set<string>): number {
  * Reference: https://github.com/sigstore/sigstore-go/blob/main/pkg/bundle/bundle.go#L159-L177
  */
 // Every bundle version this verifier implements. v0.1 may carry an inclusion promise without a proof.
-const BUNDLE_VERSIONS = ["0.1", "0.2", "0.3"];
+export const BUNDLE_VERSIONS = ["0.1", "0.2", "0.3"];
 
-function getBundleVersion(mediaType: string, enabled: readonly string[]): string {
+export function getBundleVersion(mediaType: string, enabled: readonly string[]): string {
   for (const version of enabled) {
     // Legacy "application/vnd.dev.sigstore.bundle+json;version=0.3" or current "application/vnd.dev.sigstore.bundle.v0.3+json".
     if (mediaType === `${MEDIA_TYPE_BASE}+json;version=${version}` || mediaType === `${MEDIA_TYPE_BASE}.v${version}+json`) {
@@ -305,27 +306,6 @@ export class SigstoreVerifier {
     return operators;
   }
 
-  // Verifies the signed entry timestamp and returns the integrated time it binds.
-  private async verifySET(entry: TLogEntry, promise: string, log: RekorKeyInfo): Promise<Date> {
-    const integratedTime = Number(entry.integratedTime);
-    const integratedDate = new Date(integratedTime * 1000);
-    if (integratedDate < log.validFor.start || integratedDate > log.validFor.end) {
-      throw new Error("Rekor key was not valid at the integrated time.");
-    }
-    const signed = stringToUint8Array(
-      canonicalizeJCS({
-        body: entry.canonicalizedBody,
-        integratedTime,
-        logIndex: Number(entry.logIndex),
-        logID: Uint8ArrayToHex(log.logId),
-      }),
-    );
-    if (!(await verifySignature(log.publicKey, signed, base64ToUint8Array(promise), log.hashAlgorithm))) {
-      throw new Error("Failed to verify the inclusion promise in the provided bundle.");
-    }
-    return integratedDate;
-  }
-
   // Fully verifies every entry from a trusted log and returns the SET-bound integrated times.
   // Entries from unknown logs are ignored; the threshold counts distinct log operators that verified.
   private async verifyTlogEntries(
@@ -349,7 +329,7 @@ export class SigstoreVerifier {
         throw new Error("Transparency log entry requires an inclusion proof.");
       }
       if (promise) {
-        integratedTimes.push(await this.verifySET(entry, promise, log));
+        integratedTimes.push(await verifyInclusionPromise(entry, promise, log));
       }
       if (entry.inclusionProof) {
         await verifyMerkleInclusion(entry);

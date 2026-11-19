@@ -126,6 +126,7 @@ export class RFC3161Timestamp {
     if (!uint8ArrayEqual(tstInfoDigest, expectedDigest)) {
       throw new RFC3161TimestampVerificationError(
         "signed data does not match tstInfo",
+        "timestamp-signature-invalid",
       );
     }
   }
@@ -156,6 +157,7 @@ export class RFC3161Timestamp {
     if (!verified) {
       throw new RFC3161TimestampVerificationError(
         "signature verification failed",
+        "timestamp-signature-invalid",
       );
     }
   }

@@ -1,13 +1,22 @@
-export type { MessageSignature, RFC3161Timestamp, SigstoreBundle, TimestampVerificationData, TLogEntry, VerificationMaterial } from "./bundle.js";
+export type { MessageSignature, PublicKeyIdentifier, RFC3161Timestamp, SigstoreBundle, TimestampVerificationData, TLogEntry, VerificationMaterial } from "./bundle.js";
 export {
   CertificateError,
   PolicyError,
+  REASON_CODES,
+  type ReasonCode,
   SignatureError,
   TimestampError,
   TLogError,
   VerificationError,
 } from "./errors.js";
 export type { RawTimestampAuthority, Sigstore, TrustedRoot } from "./interfaces.js";
+export {
+  type BundleInput,
+  type ManagedKeyDsseResult,
+  ManagedKeyVerifier,
+  type ManagedKeyVerifierOptions,
+  STRICT_MANAGED_KEY_PROFILE,
+} from "./managed.js";
 export type { VerificationPolicy } from "./policy.js";
 export {
   AllOf,
