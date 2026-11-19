@@ -25,6 +25,8 @@
     "build": "tsc",
     "test": "vitest run --config vite.config.playwright.ts",
     "test:node": "vitest run",
+    "test:browsers": "BROWSERS=chromium,firefox,webkit vitest run --config vite.config.playwright.ts",
+    "test:runtime": "npm run build && node test/runtime-matrix.ts && NO_NATIVE_ED25519=1 node test/runtime-matrix.ts",
     "coverage": "vitest run --coverage",
     "lint": "eslint . --fix"
   },

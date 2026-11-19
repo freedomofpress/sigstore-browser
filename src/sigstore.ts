@@ -34,7 +34,7 @@ const MAX_SUBJECTS = 1024;
 const MAX_SUBJECT_DIGESTS = 32;
 
 // Unknown operators can satisfy threshold one, but add no independence to named operators.
-function countOperators(operators: Set<string>): number {
+export function countOperators(operators: Set<string>): number {
   if (operators.size === 0) return 0;
   return Math.max(1, operators.size - (operators.has("") ? 1 : 0));
 }
@@ -44,9 +44,9 @@ function countOperators(operators: Set<string>): number {
  * Reference: https://github.com/sigstore/sigstore-go/blob/main/pkg/bundle/bundle.go#L159-L177
  */
 // Every bundle version this verifier implements. v0.1 may carry an inclusion promise without a proof.
-const BUNDLE_VERSIONS = ["0.1", "0.2", "0.3"];
+export const BUNDLE_VERSIONS = ["0.1", "0.2", "0.3"];
 
-function getBundleVersion(mediaType: string, enabled: readonly string[]): string {
+export function getBundleVersion(mediaType: string, enabled: readonly string[]): string {
   for (const version of enabled) {
     // Legacy "application/vnd.dev.sigstore.bundle+json;version=0.3" or current "application/vnd.dev.sigstore.bundle.v0.3+json".
     if (mediaType === `${MEDIA_TYPE_BASE}+json;version=${version}` || mediaType === `${MEDIA_TYPE_BASE}.v${version}+json`) {

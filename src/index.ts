@@ -10,6 +10,13 @@ export {
   VerificationError,
 } from "./errors.js";
 export type { RawTimestampAuthority, Sigstore, TrustedRoot } from "./interfaces.js";
+export {
+  type BundleInput,
+  type ManagedKeyDsseResult,
+  ManagedKeyVerifier,
+  type ManagedKeyVerifierOptions,
+  STRICT_MANAGED_KEY_PROFILE,
+} from "./managed.js";
 export type { VerificationPolicy } from "./policy.js";
 export {
   AllOf,
